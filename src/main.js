@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
@@ -10,8 +10,14 @@ if (started) {
 const createWindow = () => {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 1100,
+    height: 720,
+    minWidth: 720,
+    minHeight: 480,
+    frame: false,
+    thickFrame: false,
+    titleBarStyle: 'hidden',
+    backgroundColor: '#181818',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
     },
@@ -24,8 +30,7 @@ const createWindow = () => {
     mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
   }
 
-  // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  return mainWindow;
 };
 
 // This method will be called when Electron has finished
@@ -41,6 +46,45 @@ app.whenReady().then(() => {
       createWindow();
     }
   });
+});
+
+ipcMain.on('window:minimize', (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  window?.minimize();
+});
+
+ipcMain.on('window:toggle-maximize', (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+
+  if (!window) {
+    return;
+  }
+
+  if (window.isMaximized()) {
+    window.unmaximize();
+    return;
+  }
+
+  window.maximize();
+});
+
+ipcMain.on('window:close', (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  window?.close();
+});
+
+ipcMain.handle('window:is-maximized', (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+  return window?.isMaximized() ?? false;
+});
+
+const emitWindowState = (window) => {
+  window.webContents.send('window:maximized-changed', window.isMaximized());
+};
+
+app.on('browser-window-created', (_, window) => {
+  window.on('maximize', () => emitWindowState(window));
+  window.on('unmaximize', () => emitWindowState(window));
 });
 
 // Quit when all windows are closed, except on macOS. There, it's common
