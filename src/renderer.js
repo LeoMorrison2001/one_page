@@ -44,8 +44,8 @@ const todayPage = () => `
       <div class="journal-page__status" aria-live="polite"><i class="bi bi-cloud-check"></i><span data-save-status>未保存</span></div>
     </header>
     <div class="journal-meta" aria-label="日记信息">
-      <button class="journal-meta__item" type="button"><i class="bi bi-cloud-sun"></i><span>正在获取天气</span></button>
-      <button class="journal-meta__item" type="button"><i class="bi bi-geo-alt"></i><span>正在获取位置</span></button>
+      <button class="journal-meta__item" type="button" data-weather-button aria-label="重新获取天气"><i class="bi bi-cloud-sun"></i><span data-weather-status>正在获取天气</span></button>
+      <button class="journal-meta__item" type="button" data-location-button aria-label="重新获取位置"><i class="bi bi-geo-alt"></i><span data-location-status>正在获取位置</span></button>
     </div>
     <section class="journal-editor" aria-label="日记正文">
       <div class="journal-editor__content notion-editor-shell">
@@ -94,8 +94,148 @@ const bindTodayPage = () => {
   const slashMenu = document.querySelector('[data-slash-menu]');
   const saveStatus = document.querySelector('[data-save-status]');
   const wordCount = document.querySelector('[data-word-count]');
+  const weatherButton = document.querySelector('[data-weather-button]');
+  const locationButton = document.querySelector('[data-location-button]');
+  const weatherStatus = document.querySelector('[data-weather-status]');
+  const locationStatus = document.querySelector('[data-location-status]');
   let saveTimer;
   let slashRange = null;
+  let contextRequestInFlight = false;
+
+  const weatherLabels = {
+    0: '晴',
+    1: '大部晴朗',
+    2: '多云',
+    3: '阴',
+    45: '有雾',
+    48: '雾凇',
+    51: '毛毛雨',
+    53: '毛毛雨',
+    55: '毛毛雨',
+    56: '冻毛毛雨',
+    57: '冻毛毛雨',
+    61: '小雨',
+    63: '中雨',
+    65: '大雨',
+    66: '冻雨',
+    67: '冻雨',
+    71: '小雪',
+    73: '中雪',
+    75: '大雪',
+    77: '冰粒',
+    80: '阵雨',
+    81: '阵雨',
+    82: '强阵雨',
+    85: '阵雪',
+    86: '强阵雪',
+    95: '雷暴',
+    96: '冰雹雷暴',
+    99: '强冰雹雷暴',
+  };
+
+  const setContextStatus = (element, text, state = 'idle') => {
+    if (!element) return;
+    element.textContent = text;
+    element.closest('.journal-meta__item')?.setAttribute('data-state', state);
+  };
+
+  const getPosition = () => new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('unsupported'));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(resolve, reject, {
+      enableHighAccuracy: false,
+      timeout: 8000,
+      maximumAge: 15 * 60 * 1000,
+    });
+  });
+
+  const getWeather = async ({ latitude, longitude }) => {
+    const query = new URLSearchParams({
+      latitude: String(latitude),
+      longitude: String(longitude),
+      current: 'temperature_2m,apparent_temperature,weather_code',
+      timezone: 'auto',
+    });
+    const response = await fetch(`https://api.open-meteo.com/v1/forecast?${query}`);
+    if (!response.ok) throw new Error('weather-request-failed');
+    const data = await response.json();
+    if (!data.current) throw new Error('weather-data-missing');
+    return data.current;
+  };
+
+  const getLocationName = async ({ latitude, longitude }) => {
+    const query = new URLSearchParams({
+      latitude: String(latitude),
+      longitude: String(longitude),
+      localityLanguage: 'zh',
+    });
+    const response = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?${query}`);
+    if (!response.ok) throw new Error('location-request-failed');
+    const data = await response.json();
+    const parts = [data.locality, data.city].filter((value, index, values) => (
+      value && values.indexOf(value) === index
+    ));
+    if (parts.length === 0) throw new Error('location-data-missing');
+    return parts.join(' · ');
+  };
+
+  const getLocationErrorLabel = (error) => {
+    if (error?.code === 1) return '未授权位置';
+    if (error?.code === 2) return '无法确定位置';
+    if (error?.code === 3) return '定位超时';
+    return '系统定位不可用';
+  };
+
+  const refreshJournalContext = async () => {
+    if (contextRequestInFlight) return;
+    contextRequestInFlight = true;
+    weatherButton?.setAttribute('aria-busy', 'true');
+    locationButton?.setAttribute('aria-busy', 'true');
+    setContextStatus(locationStatus, '正在获取位置', 'loading');
+    setContextStatus(weatherStatus, '正在获取天气', 'loading');
+
+    let position;
+    try {
+      position = await getPosition();
+      // Precise coordinates are intentionally only used for this request and
+      // are not written into the journal preview or the editor document.
+      setContextStatus(locationStatus, '正在获取地点', 'loading');
+    } catch (error) {
+      setContextStatus(locationStatus, getLocationErrorLabel(error), 'error');
+      setContextStatus(weatherStatus, '未获取天气', 'error');
+      contextRequestInFlight = false;
+      weatherButton?.removeAttribute('aria-busy');
+      locationButton?.removeAttribute('aria-busy');
+      return;
+    }
+
+    const [weatherResult, locationResult] = await Promise.allSettled([
+      getWeather(position.coords),
+      getLocationName(position.coords),
+    ]);
+
+    if (weatherResult.status === 'fulfilled') {
+      const weather = weatherResult.value;
+      const temperature = Math.round(weather.temperature_2m);
+      const label = weatherLabels[weather.weather_code] ?? '天气未知';
+      setContextStatus(weatherStatus, `${label} · ${temperature}°C`, 'success');
+    } else {
+      setContextStatus(weatherStatus, '未获取天气', 'error');
+    }
+
+    if (locationResult.status === 'fulfilled') {
+      setContextStatus(locationStatus, locationResult.value, 'success');
+    } else {
+      setContextStatus(locationStatus, '当前位置', 'success');
+    }
+
+    contextRequestInFlight = false;
+    weatherButton?.removeAttribute('aria-busy');
+    locationButton?.removeAttribute('aria-busy');
+  };
 
   const updateStatus = () => {
     if (!liveEditor) return;
@@ -164,6 +304,9 @@ const bindTodayPage = () => {
     insertMedia(picker.files?.[0]);
     picker.value = '';
   }));
+  weatherButton?.addEventListener('click', refreshJournalContext);
+  locationButton?.addEventListener('click', refreshJournalContext);
+  refreshJournalContext();
 };
 
 const setActiveMenu = (menuKey) => {

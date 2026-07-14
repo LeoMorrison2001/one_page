@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, session } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
 
@@ -36,6 +36,16 @@ const createWindow = () => {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+  // The renderer only asks for this when opening a journal page. All other
+  // permissions remain denied, so a web page loaded by the app cannot obtain
+  // unrelated system access.
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => (
+    permission === 'geolocation'
+  ));
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(permission === 'geolocation');
+  });
+
   createWindow();
 
   // On OS X it's common to re-create a window in the app when the

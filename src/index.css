@@ -246,12 +246,53 @@ button {
   border-radius: 8px;
   background: #fff;
   color: #757575;
-  cursor: default;
+  cursor: pointer;
   font-size: 13px;
+  transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+}
+
+.journal-meta__item:hover {
+  border-color: #d9d9d9;
+  background: #fafafa;
+}
+
+.journal-meta__item:focus-visible {
+  outline: 2px solid rgba(70, 125, 220, 0.45);
+  outline-offset: 2px;
 }
 
 .journal-meta__item i {
   color: #a1a1a1;
+}
+
+.journal-meta__item[data-state='loading'] {
+  color: #8b8b8b;
+}
+
+.journal-meta__item[data-state='loading'] i {
+  animation: context-spin 1.2s linear infinite;
+}
+
+.journal-meta__item[data-state='success'] {
+  color: #597765;
+  background: #f7faf7;
+  border-color: #e5eee6;
+}
+
+.journal-meta__item[data-state='success'] i {
+  color: #6f987a;
+}
+
+.journal-meta__item[data-state='error'] {
+  color: #8d7777;
+}
+
+.journal-meta__item[aria-busy='true'] {
+  pointer-events: none;
+}
+
+@keyframes context-spin {
+  to { transform: rotate(360deg); }
 }
 
 .journal-editor {
