@@ -28,6 +28,16 @@
 
 import './index.css';
 
+const menus = [
+  { key: 'today', label: '\u4eca\u5929', icon: 'bi bi-sun' },
+  { key: 'calendar', label: '\u65e5\u5386', icon: 'bi bi-calendar3' },
+  { key: 'timeline', label: '\u65f6\u95f4\u7ebf', icon: 'bi bi-clock-history' },
+  { key: 'favorites', label: '\u6536\u85cf', icon: 'bi bi-bookmark-heart' },
+  { key: 'tags', label: '\u6807\u7b7e', icon: 'bi bi-tags' },
+  { key: 'review', label: '\u56de\u987e', icon: 'bi bi-arrow-repeat' },
+  { key: 'settings', label: '\u8bbe\u7f6e', icon: 'bi bi-gear' },
+];
+
 const app = document.querySelector('#app');
 
 app.innerHTML = `
@@ -49,43 +59,36 @@ app.innerHTML = `
     <main class="workspace">
       <aside class="sidebar">
         <nav class="sidebar__nav" aria-label="Journal navigation">
-          <button class="sidebar__item sidebar__item--active" type="button">
-            <i class="bi bi-sun"></i>
-            <span>今天</span>
-          </button>
-          <button class="sidebar__item" type="button">
-            <i class="bi bi-calendar3"></i>
-            <span>日历</span>
-          </button>
-          <button class="sidebar__item" type="button">
-            <i class="bi bi-clock-history"></i>
-            <span>时间线</span>
-          </button>
-          <button class="sidebar__item" type="button">
-            <i class="bi bi-bookmark-heart"></i>
-            <span>收藏</span>
-          </button>
-          <button class="sidebar__item" type="button">
-            <i class="bi bi-tags"></i>
-            <span>标签</span>
-          </button>
-          <button class="sidebar__item" type="button">
-            <i class="bi bi-arrow-repeat"></i>
-            <span>回顾</span>
-          </button>
-          <button class="sidebar__item" type="button">
-            <i class="bi bi-gear"></i>
-            <span>设置</span>
-          </button>
+          ${menus
+            .map(
+              (menu, index) => `
+                <button
+                  class="sidebar__item${index === 0 ? ' sidebar__item--active' : ''}"
+                  type="button"
+                  data-menu-key="${menu.key}"
+                  aria-current="${index === 0 ? 'page' : 'false'}"
+                >
+                  <i class="${menu.icon}"></i>
+                  <span>${menu.label}</span>
+                </button>
+              `,
+            )
+            .join('')}
         </nav>
       </aside>
-      <section class="workspace__content" aria-hidden="true"></section>
+      <section class="workspace__content">
+        <div class="page-view">
+          <h1 class="page-view__title">${menus[0].label}</h1>
+        </div>
+      </section>
     </main>
   </div>
 `;
 
 const maximizeButton = document.querySelector('[data-action="toggle-maximize"]');
 const maximizeIcon = maximizeButton?.querySelector('i');
+const menuButtons = document.querySelectorAll('[data-menu-key]');
+const pageTitle = document.querySelector('.page-view__title');
 
 const updateMaximizeButton = (isMaximized) => {
   if (!maximizeButton || !maximizeIcon) {
@@ -99,6 +102,22 @@ const updateMaximizeButton = (isMaximized) => {
   maximizeIcon.className = isMaximized ? 'bi bi-app' : 'bi bi-square';
 };
 
+const setActiveMenu = (menuKey) => {
+  const currentMenu = menus.find((menu) => menu.key === menuKey);
+
+  if (!currentMenu || !pageTitle) {
+    return;
+  }
+
+  pageTitle.textContent = currentMenu.label;
+
+  menuButtons.forEach((button) => {
+    const isActive = button.dataset.menuKey === menuKey;
+    button.classList.toggle('sidebar__item--active', isActive);
+    button.setAttribute('aria-current', isActive ? 'page' : 'false');
+  });
+};
+
 document.querySelector('[data-action="minimize"]')?.addEventListener('click', () => {
   window.windowControls.minimize();
 });
@@ -109,6 +128,12 @@ maximizeButton?.addEventListener('click', () => {
 
 document.querySelector('[data-action="close"]')?.addEventListener('click', () => {
   window.windowControls.close();
+});
+
+menuButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    setActiveMenu(button.dataset.menuKey);
+  });
 });
 
 window.windowControls.isMaximized().then(updateMaximizeButton);
