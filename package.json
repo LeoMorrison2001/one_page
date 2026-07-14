@@ -32,6 +32,11 @@
     "vite": "^5.4.21"
   },
   "dependencies": {
+    "@tiptap/core": "^3.27.4",
+    "@tiptap/extension-image": "^3.27.4",
+    "@tiptap/extension-placeholder": "^3.27.4",
+    "@tiptap/pm": "^3.27.4",
+    "@tiptap/starter-kit": "^3.27.4",
     "electron-squirrel-startup": "^1.0.1"
   }
 }
