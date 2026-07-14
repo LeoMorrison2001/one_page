@@ -37,10 +37,18 @@ const formatToday = (date) => {
   return `${date.getFullYear()}年${pad(date.getMonth() + 1)}月${pad(date.getDate())}日 ${weekdays[date.getDay()]} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 };
 
-const todayPage = () => `
-  <article class="journal-page">
+const formatEntryDate = (date) => [
+  date.getFullYear(),
+  String(date.getMonth() + 1).padStart(2, '0'),
+  String(date.getDate()).padStart(2, '0'),
+].join('-');
+
+const todayPage = () => {
+  const openedAt = new Date();
+  return `
+  <article class="journal-page" data-entry-date="${formatEntryDate(openedAt)}" data-captured-at="${openedAt.toISOString()}">
     <header class="journal-page__header">
-      <div><p class="journal-page__eyebrow">今天的日记</p><h1 class="journal-page__date">${formatToday(new Date())}</h1></div>
+      <div><p class="journal-page__eyebrow">今天的日记</p><h1 class="journal-page__date" data-journal-date>${formatToday(openedAt)}</h1></div>
       <div class="journal-page__status" aria-live="polite"><i class="bi bi-cloud-check"></i><span data-save-status>未保存</span></div>
     </header>
     <div class="journal-meta" aria-label="日记信息">
@@ -61,6 +69,7 @@ const todayPage = () => `
     <input class="media-picker" type="file" data-media-picker="video" accept="video/*">
   </article>
 `;
+};
 
 const app = document.querySelector('#app');
 app.innerHTML = `
@@ -98,9 +107,44 @@ const bindTodayPage = () => {
   const locationButton = document.querySelector('[data-location-button]');
   const weatherStatus = document.querySelector('[data-weather-status]');
   const locationStatus = document.querySelector('[data-location-status]');
+  const journalPage = document.querySelector('.journal-page');
+  const journalDate = document.querySelector('[data-journal-date]');
+  const entryDate = journalPage?.dataset.entryDate;
   let saveTimer;
   let slashRange = null;
   let contextRequestInFlight = false;
+  let isRestoring = false;
+  let contextFrozen = false;
+  let contextResolved = false;
+
+  const buildMetadata = () => ({
+    capturedAt: journalPage?.dataset.capturedAt,
+    weatherText: weatherStatus?.textContent ?? '',
+    locationText: locationStatus?.textContent ?? '',
+    contextReady: contextResolved,
+  });
+
+  const applyMetadata = (metadata) => {
+    if (!metadata?.capturedAt) return false;
+    const capturedAt = new Date(metadata.capturedAt);
+    if (Number.isNaN(capturedAt.getTime())) return false;
+    journalPage.dataset.capturedAt = capturedAt.toISOString();
+    if (journalDate) journalDate.textContent = formatToday(capturedAt);
+    if (!metadata.contextReady) return false;
+    setContextStatus(weatherStatus, metadata.weatherText || '未获取天气', 'success');
+    setContextStatus(locationStatus, metadata.locationText || '当前位置', 'success');
+    weatherButton?.setAttribute('disabled', '');
+    locationButton?.setAttribute('disabled', '');
+    contextFrozen = true;
+    contextResolved = true;
+    return true;
+  };
+
+  window.journalStore.status().then(({ available, error }) => {
+    if (available) return;
+    console.error('Journal storage is unavailable', error);
+    if (saveStatus) saveStatus.textContent = `存储不可用：${error || '初始化失败'}`;
+  });
 
   const weatherLabels = {
     0: '晴',
@@ -190,7 +234,7 @@ const bindTodayPage = () => {
   };
 
   const refreshJournalContext = async () => {
-    if (contextRequestInFlight) return;
+    if (contextRequestInFlight || contextFrozen) return;
     contextRequestInFlight = true;
     weatherButton?.setAttribute('aria-busy', 'true');
     locationButton?.setAttribute('aria-busy', 'true');
@@ -207,8 +251,10 @@ const bindTodayPage = () => {
       setContextStatus(locationStatus, getLocationErrorLabel(error), 'error');
       setContextStatus(weatherStatus, '未获取天气', 'error');
       contextRequestInFlight = false;
+      contextResolved = true;
       weatherButton?.removeAttribute('aria-busy');
       locationButton?.removeAttribute('aria-busy');
+      scheduleSave();
       return;
     }
 
@@ -233,18 +279,52 @@ const bindTodayPage = () => {
     }
 
     contextRequestInFlight = false;
+    contextResolved = true;
     weatherButton?.removeAttribute('aria-busy');
     locationButton?.removeAttribute('aria-busy');
+    scheduleSave();
   };
 
-  const updateStatus = () => {
+  const hasMeaningfulContent = (node) => {
+    if (!node) return false;
+    if (node.type === 'image' || node.type === 'video') return true;
+    if (node.type === 'text' && node.text?.trim()) return true;
+    return node.content?.some(hasMeaningfulContent) ?? false;
+  };
+
+  const updateWordCount = () => {
     if (!liveEditor) return;
     if (wordCount) wordCount.textContent = `${liveEditor.getText().trim().length} 字`;
+  };
+
+  const saveJournal = async () => {
+    if (!liveEditor || !entryDate) return;
+    const content = liveEditor.getJSON();
+    if (!hasMeaningfulContent(content)) {
+      await window.journalStore.remove(entryDate);
+      if (saveStatus) saveStatus.textContent = '未保存';
+      return;
+    }
+
     if (saveStatus) saveStatus.textContent = '正在保存';
+    try {
+      await window.journalStore.save({
+        entryDate,
+        content,
+        plainText: liveEditor.getText().trim(),
+        metadata: buildMetadata(),
+      });
+      if (saveStatus) saveStatus.textContent = '已自动保存';
+    } catch (error) {
+      console.error('Failed to save journal', error);
+      if (saveStatus) saveStatus.textContent = '保存失败';
+    }
+  };
+
+  const scheduleSave = () => {
+    if (!liveEditor || isRestoring) return;
     window.clearTimeout(saveTimer);
-    saveTimer = window.setTimeout(() => {
-      if (saveStatus) saveStatus.textContent = '已自动保存 · 本次预览';
-    }, 800);
+    saveTimer = window.setTimeout(saveJournal, 650);
   };
 
   const hideSlashMenu = () => {
@@ -267,14 +347,26 @@ const bindTodayPage = () => {
     slashRange = { from: $from.start(), to: $from.end() };
   };
 
-  const insertMedia = (file) => {
+  const insertMedia = async (file) => {
     if (!file || !liveEditor) return;
-    const type = file.type.startsWith('video/') ? 'video' : 'image';
-    const src = URL.createObjectURL(file);
-    const chain = liveEditor.chain().focus();
-    if (slashRange) chain.deleteRange(slashRange);
-    chain.insertContent({ type, attrs: { src } }).createParagraphNear().run();
-    hideSlashMenu();
+    if (!entryDate) return;
+    try {
+      if (saveStatus) saveStatus.textContent = '正在导入媒体';
+      const media = await window.journalStore.importMedia({
+        entryDate,
+        fileName: file.name,
+        mimeType: file.type,
+        bytes: await file.arrayBuffer(),
+      });
+      const type = file.type.startsWith('video/') ? 'video' : 'image';
+      const chain = liveEditor.chain().focus();
+      if (slashRange) chain.deleteRange(slashRange);
+      chain.insertContent({ type, attrs: { src: media.src } }).createParagraphNear().run();
+      hideSlashMenu();
+    } catch (error) {
+      console.error('Failed to import media', error);
+      if (saveStatus) saveStatus.textContent = '媒体导入失败';
+    }
   };
 
   liveEditor = new Editor({
@@ -288,25 +380,44 @@ const bindTodayPage = () => {
     editorProps: {
       attributes: { class: 'ProseMirror', 'aria-label': '日记正文' },
     },
-    onCreate: updateStatus,
+    onCreate: updateWordCount,
     onUpdate: () => {
-      updateStatus();
+      updateWordCount();
+      scheduleSave();
       syncSlashMenu();
     },
     onSelectionUpdate: syncSlashMenu,
+  });
+
+  const editorForPage = liveEditor;
+  window.journalStore.load(entryDate).then((entry) => {
+    if (!entry || liveEditor !== editorForPage) {
+      if (saveStatus && !entry) saveStatus.textContent = '未保存';
+      refreshJournalContext();
+      return;
+    }
+    isRestoring = true;
+    editorForPage.commands.setContent(entry.content);
+    isRestoring = false;
+    updateWordCount();
+    if (!applyMetadata(entry.metadata)) refreshJournalContext();
+    if (saveStatus) saveStatus.textContent = '已自动保存';
+  }).catch((error) => {
+    console.error('Failed to load journal', error);
+    if (saveStatus) saveStatus.textContent = '读取失败';
+    refreshJournalContext();
   });
 
   document.querySelectorAll('[data-slash-action]').forEach((button) => {
     button.addEventListener('mousedown', (event) => event.preventDefault());
     button.addEventListener('click', () => document.querySelector(`[data-media-picker="${button.dataset.slashAction}"]`)?.click());
   });
-  document.querySelectorAll('[data-media-picker]').forEach((picker) => picker.addEventListener('change', () => {
-    insertMedia(picker.files?.[0]);
+  document.querySelectorAll('[data-media-picker]').forEach((picker) => picker.addEventListener('change', async () => {
+    await insertMedia(picker.files?.[0]);
     picker.value = '';
   }));
   weatherButton?.addEventListener('click', refreshJournalContext);
   locationButton?.addEventListener('click', refreshJournalContext);
-  refreshJournalContext();
 };
 
 const setActiveMenu = (menuKey) => {

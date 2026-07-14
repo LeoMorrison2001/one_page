@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain, session } from 'electron';
+import { app, BrowserWindow, ipcMain, net, protocol, session } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
+import { createJournalStore } from './journal-store.js';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -32,6 +33,9 @@ const createWindow = () => {
   return mainWindow;
 };
 
+let journalStore;
+let journalStoreError = '';
+
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
@@ -46,6 +50,17 @@ app.whenReady().then(() => {
     callback(permission === 'geolocation');
   });
 
+  try {
+    journalStore = createJournalStore({ dataDirectory: app.getPath('userData') });
+    protocol.handle('journal-media', (request) => {
+      const mediaPath = journalStore.resolveMediaPath(request.url);
+      return mediaPath ? net.fetch(`file://${mediaPath.replace(/\\/g, '/')}`) : new Response('Not found', { status: 404 });
+    });
+  } catch (error) {
+    journalStoreError = error instanceof Error ? error.message : String(error);
+    console.error('Journal storage is unavailable:', error);
+  }
+
   createWindow();
 
   // On OS X it's common to re-create a window in the app when the
@@ -56,6 +71,15 @@ app.whenReady().then(() => {
     }
   });
 });
+
+ipcMain.handle('journal:load', (_event, entryDate) => journalStore?.load(entryDate) ?? null);
+ipcMain.handle('journal:save', (_event, entry) => journalStore?.save(entry) ?? { saved: false });
+ipcMain.handle('journal:remove', (_event, entryDate) => journalStore?.remove(entryDate));
+ipcMain.handle('journal:import-media', (_event, media) => journalStore?.importMedia(media));
+ipcMain.handle('journal:status', () => ({
+  available: Boolean(journalStore),
+  error: journalStoreError,
+}));
 
 ipcMain.on('window:minimize', (event) => {
   const window = BrowserWindow.fromWebContents(event.sender);
@@ -104,6 +128,8 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
+
+app.on('before-quit', () => journalStore?.close());
 
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.

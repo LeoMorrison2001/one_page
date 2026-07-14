@@ -291,6 +291,11 @@ button {
   pointer-events: none;
 }
 
+.journal-meta__item:disabled {
+  cursor: default;
+  opacity: 0.82;
+}
+
 @keyframes context-spin {
   to { transform: rotate(360deg); }
 }
