@@ -51,4 +51,12 @@ contextBridge.exposeInMainWorld('appSecurity', {
 
 contextBridge.exposeInMainWorld('appUpdates', {
   check: () => ipcRenderer.invoke('updates:check'),
+  download: () => ipcRenderer.invoke('updates:download'),
+  install: () => ipcRenderer.invoke('updates:install'),
+  getState: () => ipcRenderer.invoke('updates:get-state'),
+  onState: (callback) => {
+    const listener = (_, state) => callback(state);
+    ipcRenderer.on('updates:state', listener);
+    return () => ipcRenderer.removeListener('updates:state', listener);
+  },
 });

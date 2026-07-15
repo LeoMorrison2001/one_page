@@ -1,11 +1,11 @@
-import { app, autoUpdater, BrowserWindow, dialog, ipcMain, net, protocol, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, net, protocol, session, shell } from 'electron';
 import AdmZip from 'adm-zip';
 import fs from 'node:fs';
 import path from 'node:path';
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { spawn } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import started from 'electron-squirrel-startup';
-import { updateElectronApp } from 'update-electron-app';
 import { createJournalStore } from './journal-store.js';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -71,8 +71,20 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 let mainWindow = null;
-let installedUpdaterReady = false;
 const githubRepository = 'LeoMorrison2001/one_page';
+let updateState = { status: 'idle', version: null, downloaded: 0, total: 0, installerPath: null, asset: null };
+
+const updateStateSnapshot = () => ({
+  status: updateState.status,
+  version: updateState.version,
+  downloaded: updateState.downloaded,
+  total: updateState.total,
+});
+
+const setUpdateState = (nextState) => {
+  updateState = { ...updateState, ...nextState };
+  mainWindow?.webContents.send('updates:state', updateStateSnapshot());
+};
 
 // Squirrel installs the app inside an app-<version> folder next to Update.exe.
 // The ZIP build does not include that updater, so it must never try to replace
@@ -120,31 +132,82 @@ const checkPortableUpdate = async ({ showDialog = false } = {}) => {
   }
 };
 
+const findLatestInstaller = async () => {
+  const response = await net.fetch(`https://api.github.com/repos/${githubRepository}/releases/latest`, {
+    headers: { Accept: 'application/vnd.github+json' },
+  });
+  if (!response.ok) throw new Error(`GitHub returned ${response.status}`);
+  const release = await response.json();
+  const asset = release.assets?.find((item) => /-windows-x64-setup\.exe$/i.test(item.name));
+  if (!asset?.browser_download_url) throw new Error('Release does not contain a Windows installer');
+  return { version: release.tag_name, asset };
+};
+
+const checkInstalledUpdate = async () => {
+  if (updateState.status === 'downloading') return updateStateSnapshot();
+  setUpdateState({ status: 'checking', version: null, downloaded: 0, total: 0, installerPath: null, asset: null });
+  try {
+    const { version, asset } = await findLatestInstaller();
+    if (compareVersions(version, app.getVersion()) <= 0) {
+      setUpdateState({ status: 'up-to-date' });
+      return updateStateSnapshot();
+    }
+    setUpdateState({ status: 'available', version, asset });
+    return updateStateSnapshot();
+  } catch (error) {
+    console.error('Unable to check installed update:', error);
+    setUpdateState({ status: 'error' });
+    return updateStateSnapshot();
+  }
+};
+
+const downloadInstalledUpdate = async () => {
+  if (updateState.status !== 'available' || !updateState.asset) throw new Error('No update is ready to download');
+  const { asset } = updateState;
+  const temporaryPath = path.join(app.getPath('temp'), asset.name);
+  const output = fs.createWriteStream(temporaryPath);
+  const hash = createHash('sha256');
+  setUpdateState({ status: 'downloading', downloaded: 0, total: 0, installerPath: null });
+  try {
+    const response = await net.fetch(asset.browser_download_url);
+    if (!response.ok || !response.body) throw new Error(`Download returned ${response.status}`);
+    const total = Number(response.headers.get('content-length')) || 0;
+    let downloaded = 0;
+    const reader = response.body.getReader();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = Buffer.from(value);
+      hash.update(chunk);
+      downloaded += chunk.length;
+      if (!output.write(chunk)) await new Promise((resolve) => output.once('drain', resolve));
+      setUpdateState({ downloaded, total });
+    }
+    await new Promise((resolve, reject) => output.end((error) => (error ? reject(error) : resolve())));
+    const expectedDigest = typeof asset.digest === 'string' ? asset.digest.replace(/^sha256:/, '') : '';
+    if (expectedDigest && hash.digest('hex') !== expectedDigest) throw new Error('Installer checksum verification failed');
+    setUpdateState({ status: 'ready', installerPath: temporaryPath });
+  } catch (error) {
+    output.destroy();
+    fs.rmSync(temporaryPath, { force: true });
+    console.error('Unable to download update:', error);
+    setUpdateState({ status: 'error' });
+  }
+  return updateStateSnapshot();
+};
+
+const installDownloadedUpdate = () => {
+  if (updateState.status !== 'ready' || !updateState.installerPath) throw new Error('Update has not finished downloading');
+  const installer = spawn(updateState.installerPath, [], { detached: true, stdio: 'ignore' });
+  installer.unref();
+  app.quit();
+};
+
 const configureUpdates = () => {
   if (!app.isPackaged || process.platform !== 'win32') return;
-  if (!isSquirrelInstall()) {
-    setTimeout(() => checkPortableUpdate({ showDialog: true }), 10_000);
-    return;
-  }
-  if (process.argv.includes('--squirrel-firstrun')) return;
   setTimeout(() => {
-    updateElectronApp({
-      repo: githubRepository,
-      updateInterval: '6 hours',
-      onNotifyUser: async ({ releaseName }) => {
-        const result = await dialog.showMessageBox(mainWindow, {
-          type: 'info',
-          buttons: ['立即重启更新', '稍后'],
-          defaultId: 0,
-          cancelId: 1,
-          title: '更新已准备好',
-          message: `一页 ${releaseName || '新版本'} 已下载`,
-          detail: '重启应用即可完成更新。你的日记数据不会受到影响。',
-        });
-        if (result.response === 0) autoUpdater.quitAndInstall();
-      },
-    });
-    installedUpdaterReady = true;
+    if (isSquirrelInstall()) checkInstalledUpdate();
+    else checkPortableUpdate({ showDialog: true });
   }, 10_000);
 };
 const appIconPath = app.isPackaged
@@ -463,8 +526,11 @@ ipcMain.handle('security:change-password', (_event, currentPassword, newPassword
 ipcMain.handle('updates:check', async () => {
   if (!app.isPackaged) return { status: 'development' };
   if (!isSquirrelInstall()) return checkPortableUpdate({ showDialog: true });
-  return { status: installedUpdaterReady ? 'automatic' : 'scheduled' };
+  return checkInstalledUpdate();
 });
+ipcMain.handle('updates:download', downloadInstalledUpdate);
+ipcMain.handle('updates:install', () => installDownloadedUpdate());
+ipcMain.handle('updates:get-state', () => updateStateSnapshot());
 
 ipcMain.on('window:minimize', (event) => {
   const window = BrowserWindow.fromWebContents(event.sender);
