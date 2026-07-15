@@ -116,6 +116,13 @@ const bindTodayPage = () => {
   let isRestoring = false;
   let contextFrozen = false;
   let contextResolved = false;
+  let isLoadingEntry = true;
+
+  const finishInitialLoad = () => {
+    if (liveEditor !== editorForPage) return;
+    isLoadingEntry = false;
+    editorForPage.setEditable(true);
+  };
 
   const buildMetadata = () => ({
     capturedAt: journalPage?.dataset.capturedAt,
@@ -322,7 +329,7 @@ const bindTodayPage = () => {
   };
 
   const scheduleSave = () => {
-    if (!liveEditor || isRestoring) return;
+    if (!liveEditor || isRestoring || isLoadingEntry) return;
     window.clearTimeout(saveTimer);
     saveTimer = window.setTimeout(saveJournal, 650);
   };
@@ -356,7 +363,7 @@ const bindTodayPage = () => {
         entryDate,
         fileName: file.name,
         mimeType: file.type,
-        bytes: await file.arrayBuffer(),
+      file,
       });
       const type = file.type.startsWith('video/') ? 'video' : 'image';
       const chain = liveEditor.chain().focus();
@@ -380,6 +387,7 @@ const bindTodayPage = () => {
     editorProps: {
       attributes: { class: 'ProseMirror', 'aria-label': '日记正文' },
     },
+    editable: false,
     onCreate: updateWordCount,
     onUpdate: () => {
       updateWordCount();
@@ -391,8 +399,10 @@ const bindTodayPage = () => {
 
   const editorForPage = liveEditor;
   window.journalStore.load(entryDate).then((entry) => {
-    if (!entry || liveEditor !== editorForPage) {
+    if (liveEditor !== editorForPage) return;
+    if (!entry) {
       if (saveStatus && !entry) saveStatus.textContent = '未保存';
+      finishInitialLoad();
       refreshJournalContext();
       return;
     }
@@ -402,9 +412,12 @@ const bindTodayPage = () => {
     updateWordCount();
     if (!applyMetadata(entry.metadata)) refreshJournalContext();
     if (saveStatus) saveStatus.textContent = '已自动保存';
+    finishInitialLoad();
   }).catch((error) => {
+    if (liveEditor !== editorForPage) return;
     console.error('Failed to load journal', error);
     if (saveStatus) saveStatus.textContent = '读取失败';
+    finishInitialLoad();
     refreshJournalContext();
   });
 

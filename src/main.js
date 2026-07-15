@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain, net, protocol, session } from 'electron';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import started from 'electron-squirrel-startup';
 import { createJournalStore } from './journal-store.js';
 
@@ -8,9 +9,25 @@ if (started) {
   app.quit();
 }
 
+// Media is served through a private protocol. Marking it as a stream before
+// app readiness lets Chromium use byte-range loading for video controls.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'journal-media',
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+    },
+  },
+]);
+
+let mainWindow = null;
+
 const createWindow = () => {
   // Create the browser window.
-  const mainWindow = new BrowserWindow({
+  mainWindow = new BrowserWindow({
     width: 1100,
     height: 720,
     minWidth: 720,
@@ -20,6 +37,9 @@ const createWindow = () => {
     backgroundColor: '#181818',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
     },
   });
 
@@ -30,7 +50,11 @@ const createWindow = () => {
     mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
   }
 
-  return mainWindow;
+  const createdWindow = mainWindow;
+  createdWindow.on('closed', () => {
+    if (mainWindow === createdWindow) mainWindow = null;
+  });
+  return createdWindow;
 };
 
 let journalStore;
@@ -43,18 +67,25 @@ app.whenReady().then(() => {
   // The renderer only asks for this when opening a journal page. All other
   // permissions remain denied, so a web page loaded by the app cannot obtain
   // unrelated system access.
-  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => (
-    permission === 'geolocation'
+  const isJournalRenderer = (webContents) => {
+    if (webContents !== mainWindow?.webContents) return false;
+    const url = webContents.getURL();
+    return MAIN_WINDOW_VITE_DEV_SERVER_URL
+      ? url.startsWith(MAIN_WINDOW_VITE_DEV_SERVER_URL)
+      : url.startsWith('file:');
+  };
+  session.defaultSession.setPermissionCheckHandler((webContents, permission) => (
+    permission === 'geolocation' && isJournalRenderer(webContents)
   ));
-  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-    callback(permission === 'geolocation');
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    callback(permission === 'geolocation' && isJournalRenderer(webContents));
   });
 
   try {
     journalStore = createJournalStore({ dataDirectory: app.getPath('userData') });
     protocol.handle('journal-media', (request) => {
       const mediaPath = journalStore.resolveMediaPath(request.url);
-      return mediaPath ? net.fetch(`file://${mediaPath.replace(/\\/g, '/')}`) : new Response('Not found', { status: 404 });
+      return mediaPath ? net.fetch(pathToFileURL(mediaPath).toString()) : new Response('Not found', { status: 404 });
     });
   } catch (error) {
     journalStoreError = error instanceof Error ? error.message : String(error);

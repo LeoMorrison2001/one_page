@@ -4,7 +4,8 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 
 const entryDatePattern = /^\d{4}-\d{2}-\d{2}$/;
-const maximumMediaBytes = { image: 25 * 1024 * 1024, video: 250 * 1024 * 1024 };
+const maximumMediaBytes = { image: 25 * 1024 * 1024, video: 100 * 1024 * 1024 };
+const schemaVersion = '2';
 
 const validateEntryDate = (entryDate) => {
   if (!entryDatePattern.test(entryDate)) throw new Error('Invalid journal date');
@@ -23,6 +24,23 @@ const extensionFor = (fileName, mimeType) => {
   return mimeType === 'image/jpeg' ? '.jpg' : mimeType === 'image/png' ? '.png' : mimeType === 'video/mp4' ? '.mp4' : '';
 };
 
+const mediaNamesIn = (content, entryDate, names = new Set()) => {
+  if (!content) return names;
+  if ((content.type === 'image' || content.type === 'video') && typeof content.attrs?.src === 'string') {
+    try {
+      const source = new URL(content.attrs.src);
+      if (source.protocol === 'journal-media:' && source.hostname === entryDate) {
+        const name = decodeURIComponent(source.pathname).replace(/^[/\\]+/, '');
+        if (/^[a-f0-9-]{36}(?:\.[a-z0-9]{1,8})?$/i.test(name)) names.add(name);
+      }
+    } catch {
+      // Ignore malformed editor content rather than deleting unrelated files.
+    }
+  }
+  content.content?.forEach((node) => mediaNamesIn(node, entryDate, names));
+  return names;
+};
+
 export const createJournalStore = ({ dataDirectory }) => {
   const databaseDirectory = path.join(dataDirectory, 'journal');
   const databasePath = path.join(databaseDirectory, 'journal.db');
@@ -39,17 +57,33 @@ export const createJournalStore = ({ dataDirectory }) => {
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   )`);
-  try {
+  database.exec(`CREATE TABLE IF NOT EXISTS journal_metadata (
+    key TEXT PRIMARY KEY NOT NULL,
+    value TEXT NOT NULL
+  )`);
+  const hasMetadataColumn = database.prepare("SELECT 1 AS present FROM pragma_table_info('journal_entries') WHERE name = 'metadata_json'").get();
+  if (!hasMetadataColumn) {
     database.exec("ALTER TABLE journal_entries ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'");
-  } catch {
-    // Existing databases already have this column.
   }
+  database.prepare("INSERT INTO journal_metadata (key, value) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(schemaVersion);
 
   const selectEntry = database.prepare('SELECT * FROM journal_entries WHERE entry_date = ?');
   const upsertEntry = database.prepare(`INSERT INTO journal_entries (entry_date, content_json, plain_text, metadata_json, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(entry_date) DO UPDATE SET content_json = excluded.content_json, plain_text = excluded.plain_text, metadata_json = excluded.metadata_json, updated_at = excluded.updated_at`);
   const deleteEntry = database.prepare('DELETE FROM journal_entries WHERE entry_date = ?');
+
+  const entryMediaDirectory = (entryDate) => path.join(mediaDirectory, entryDate);
+  const removeEntryMedia = (entryDate) => fs.rmSync(entryMediaDirectory(entryDate), { recursive: true, force: true });
+  const removeUnusedMedia = (entryDate, content) => {
+    const directory = entryMediaDirectory(entryDate);
+    if (!fs.existsSync(directory)) return;
+    const referenced = mediaNamesIn(content, entryDate);
+    for (const item of fs.readdirSync(directory, { withFileTypes: true })) {
+      if (item.isFile() && !referenced.has(item.name)) fs.unlinkSync(path.join(directory, item.name));
+    }
+    if (fs.readdirSync(directory).length === 0) fs.rmdirSync(directory);
+  };
 
   return {
     load(entryDate) {
@@ -69,22 +103,26 @@ export const createJournalStore = ({ dataDirectory }) => {
       if (!isMeaningfulContent(content)) return this.remove(entryDate);
       const now = new Date().toISOString();
       upsertEntry.run(entryDate, JSON.stringify(content), String(plainText), JSON.stringify(metadata), now, now);
+      removeUnusedMedia(entryDate, content);
       return { saved: true, updatedAt: now };
     },
     remove(entryDate) {
       validateEntryDate(entryDate);
       deleteEntry.run(entryDate);
+      removeEntryMedia(entryDate);
       return { saved: false };
     },
-    importMedia({ entryDate, fileName, mimeType, bytes }) {
+    importMedia({ entryDate, fileName, mimeType, filePath }) {
       validateEntryDate(entryDate);
       const type = mimeType?.startsWith('image/') ? 'image' : mimeType?.startsWith('video/') ? 'video' : null;
-      const fileBytes = Buffer.from(bytes);
-      if (!type || fileBytes.length === 0 || fileBytes.length > maximumMediaBytes[type]) throw new Error('Unsupported media file');
-      const directory = path.join(mediaDirectory, entryDate);
+      if (!type || typeof filePath !== 'string' || !path.isAbsolute(filePath)) throw new Error('Unsupported media file');
+      const source = path.resolve(filePath);
+      const sourceStats = fs.statSync(source);
+      if (!sourceStats.isFile() || sourceStats.size === 0 || sourceStats.size > maximumMediaBytes[type]) throw new Error('Unsupported media file');
+      const directory = entryMediaDirectory(entryDate);
       fs.mkdirSync(directory, { recursive: true });
       const name = `${crypto.randomUUID()}${extensionFor(fileName ?? '', mimeType)}`;
-      fs.writeFileSync(path.join(directory, name), fileBytes, { mode: 0o600 });
+      fs.copyFileSync(source, path.join(directory, name));
       return { src: `journal-media://${entryDate}/${name}` };
     },
     resolveMediaPath(url) {

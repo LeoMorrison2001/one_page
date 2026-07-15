@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 contextBridge.exposeInMainWorld('windowControls', {
   minimize: () => ipcRenderer.send('window:minimize'),
@@ -20,5 +20,10 @@ contextBridge.exposeInMainWorld('journalStore', {
   load: (entryDate) => ipcRenderer.invoke('journal:load', entryDate),
   save: (entry) => ipcRenderer.invoke('journal:save', entry),
   remove: (entryDate) => ipcRenderer.invoke('journal:remove', entryDate),
-  importMedia: (media) => ipcRenderer.invoke('journal:import-media', media),
+  importMedia: ({ entryDate, file }) => ipcRenderer.invoke('journal:import-media', {
+    entryDate,
+    fileName: file.name,
+    mimeType: file.type,
+    filePath: webUtils.getPathForFile(file),
+  }),
 });
