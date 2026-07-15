@@ -20,6 +20,8 @@ if (process.platform === 'win32') {
 const appDataDirectory = app.getPath('appData');
 const legacyUserDataDirectory = path.join(appDataDirectory, '一页');
 const stableUserDataDirectory = path.join(appDataDirectory, 'one-page');
+const developmentUserDataDirectory = path.join(appDataDirectory, 'one-page-dev');
+const isDevelopment = !app.isPackaged;
 const legacyDatabasePath = path.join(legacyUserDataDirectory, 'journal', 'journal.db');
 const stableDatabasePath = path.join(stableUserDataDirectory, 'journal', 'journal.db');
 
@@ -48,12 +50,17 @@ const migrateLegacyUserData = () => {
   }
 };
 
-try {
-  migrateLegacyUserData();
-  app.setPath('userData', stableUserDataDirectory);
-} catch (error) {
-  console.error('Unable to migrate legacy user data; continuing with the legacy location:', error);
-  app.setPath('userData', legacyUserDataDirectory);
+if (isDevelopment) {
+  // Keep development data isolated so local testing cannot alter production journals.
+  app.setPath('userData', developmentUserDataDirectory);
+} else {
+  try {
+    migrateLegacyUserData();
+    app.setPath('userData', stableUserDataDirectory);
+  } catch (error) {
+    console.error('Unable to migrate legacy user data; continuing with the legacy location:', error);
+    app.setPath('userData', legacyUserDataDirectory);
+  }
 }
 
 // Media is served through a private protocol. Marking it as a stream before

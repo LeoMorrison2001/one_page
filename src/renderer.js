@@ -350,10 +350,9 @@ const showSecurityGate = ({ passwordSet, onUnlocked }) => {
   gate.innerHTML = `
     <form class="security-gate__panel" data-security-form>
       <img class="security-gate__logo" src="${appIconUrl}" alt="" />
-      <h1>${passwordSet ? '请输入密码进入一页' : '设置应用密码'}</h1>
-      ${passwordSet ? '' : '<p>首次使用，请设置一个密码来保护日记界面。</p>'}
-      <label>${passwordSet ? '密码' : '新密码（至少 6 个字符）'}
-        <input type="password" data-security-password autocomplete="${passwordSet ? 'current-password' : 'new-password'}" minlength="6" maxlength="256" required autofocus>
+      <h1>${passwordSet ? '请输入密码进入一页' : '请给一页设置保护密码'}</h1>
+      <label>${passwordSet ? '密码' : '新密码'}
+        <input type="password" data-security-password autocomplete="${passwordSet ? 'current-password' : 'new-password'}" minlength="6" maxlength="256" placeholder="${passwordSet ? '' : '至少 6 个字符'}" required autofocus>
       </label>
       ${passwordSet ? '' : `<label>确认密码
         <input type="password" data-security-confirm-password autocomplete="new-password" minlength="6" maxlength="256" required>
