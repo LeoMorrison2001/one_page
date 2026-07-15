@@ -34,7 +34,7 @@ const menus = [
 const formatToday = (date) => {
   const weekdays = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
   const pad = (value) => String(value).padStart(2, '0');
-  return `${date.getFullYear()}年${pad(date.getMonth() + 1)}月${pad(date.getDate())}日 ${weekdays[date.getDay()]} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  return `${date.getFullYear()}年${pad(date.getMonth() + 1)}月${pad(date.getDate())}日 ${weekdays[date.getDay()]}`;
 };
 
 const formatEntryDate = (date) => [
@@ -43,17 +43,107 @@ const formatEntryDate = (date) => [
   String(date.getDate()).padStart(2, '0'),
 ].join('-');
 
+const formatCalendarTitle = (date) => `${date.getFullYear()}年${date.getMonth() + 1}月`;
+const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日'];
+const moods = [
+  { emoji: '😄', label: '开心' },
+  { emoji: '😌', label: '平静' },
+  { emoji: '🥰', label: '满足' },
+  { emoji: '😔', label: '低落' },
+  { emoji: '😤', label: '烦躁' },
+  { emoji: '😴', label: '疲惫' },
+];
+
+const getCalendarDays = (visibleMonth) => {
+  const firstDay = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1);
+  const mondayOffset = (firstDay.getDay() + 6) % 7;
+  const gridStart = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1 - mondayOffset);
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(gridStart);
+    date.setDate(gridStart.getDate() + index);
+    return date;
+  });
+};
+
+const isSameDay = (left, right) => (
+  left.getFullYear() === right.getFullYear()
+  && left.getMonth() === right.getMonth()
+  && left.getDate() === right.getDate()
+);
+
+const calendarPage = (visibleMonth = new Date()) => {
+  const month = new Date(visibleMonth.getFullYear(), visibleMonth.getMonth(), 1);
+  const today = new Date();
+  return `
+    <section class="calendar-page" data-calendar-month="${formatEntryDate(month)}">
+      <header class="calendar-page__header">
+        <div>
+          <h1 class="calendar-page__title">${formatCalendarTitle(month)}</h1>
+        </div>
+        <div class="calendar-page__actions" aria-label="切换月份">
+          <button class="calendar-action" type="button" data-calendar-action="previous" aria-label="上个月"><i class="bi bi-chevron-left"></i></button>
+          <button class="calendar-action calendar-action--today" type="button" data-calendar-action="today">今天</button>
+          <button class="calendar-action" type="button" data-calendar-action="next" aria-label="下个月"><i class="bi bi-chevron-right"></i></button>
+        </div>
+      </header>
+      <div class="calendar-shell">
+        <div class="calendar-weekdays" aria-hidden="true">
+          ${weekdayLabels.map((day) => `<span>${day}</span>`).join('')}
+        </div>
+        <div class="calendar-grid" role="grid" aria-label="${formatCalendarTitle(month)}日历">
+          ${getCalendarDays(month).map((date) => {
+            const outsideMonth = date.getMonth() !== month.getMonth();
+            const isToday = isSameDay(date, today);
+            const classNames = ['calendar-day'];
+            if (outsideMonth) classNames.push('calendar-day--outside');
+            if (isToday) classNames.push('calendar-day--today');
+            return `<button class="${classNames.join(' ')}" type="button" data-calendar-date="${formatEntryDate(date)}" role="gridcell" aria-label="${formatEntryDate(date)}${isToday ? '，今天' : ''}">
+              <span class="calendar-day__number">${date.getDate()}</span>
+            </button>`;
+          }).join('')}
+        </div>
+      </div>
+      <p class="calendar-page__hint"><i class="bi bi-mouse"></i> 双击任意日期，查看当天日记</p>
+    </section>
+  `;
+};
+
+const calendarPreviewPage = (entryDate) => {
+  const selectedDate = new Date(`${entryDate}T00:00:00`);
+  return `
+    <section class="calendar-preview">
+      <header class="calendar-preview__header">
+        <h1 class="calendar-preview__title">${formatToday(selectedDate).replace(/ \d{2}:\d{2}:\d{2}$/, '')}</h1>
+        <button class="calendar-preview__back" type="button" data-calendar-back><i class="bi bi-arrow-left"></i> 返回日历</button>
+      </header>
+      <div class="calendar-preview__meta" data-calendar-preview-meta hidden>
+        <span><i class="bi bi-cloud-sun"></i><span data-calendar-preview-weather></span></span>
+        <span><i class="bi bi-geo-alt"></i><span data-calendar-preview-location></span></span>
+        <span><span data-calendar-preview-mood></span></span>
+      </div>
+      <div class="calendar-preview__content" data-calendar-preview-content>
+        <p class="calendar-preview__status" data-calendar-preview-status>正在读取日记…</p>
+        <div class="calendar-preview__editor" data-calendar-preview-editor hidden></div>
+      </div>
+    </section>
+  `;
+};
+
 const todayPage = () => {
   const openedAt = new Date();
   return `
   <article class="journal-page" data-entry-date="${formatEntryDate(openedAt)}" data-captured-at="${openedAt.toISOString()}">
     <header class="journal-page__header">
-      <div><p class="journal-page__eyebrow">今天的日记</p><h1 class="journal-page__date" data-journal-date>${formatToday(openedAt)}</h1></div>
+      <div><h1 class="journal-page__date" data-journal-date>${formatToday(openedAt)}</h1></div>
       <div class="journal-page__status" aria-live="polite"><i class="bi bi-cloud-check"></i><span data-save-status>未保存</span></div>
     </header>
     <div class="journal-meta" aria-label="日记信息">
       <button class="journal-meta__item" type="button" data-weather-button aria-label="重新获取天气"><i class="bi bi-cloud-sun"></i><span data-weather-status>正在获取天气</span></button>
       <button class="journal-meta__item" type="button" data-location-button aria-label="重新获取位置"><i class="bi bi-geo-alt"></i><span data-location-status>正在获取位置</span></button>
+      <button class="journal-meta__item journal-meta__item--mood" type="button" data-mood-button aria-expanded="false"><span data-mood-status>选择心情</span></button>
+      <div class="mood-picker" data-mood-picker hidden>
+        ${moods.map((mood) => `<button type="button" data-mood="${mood.emoji}" aria-label="${mood.label}"><span>${mood.emoji}</span><small>${mood.label}</small></button>`).join('')}
+      </div>
     </div>
     <section class="journal-editor" aria-label="日记正文">
       <div class="journal-editor__content notion-editor-shell">
@@ -90,6 +180,24 @@ const maximizeIcon = maximizeButton?.querySelector('i');
 const menuButtons = document.querySelectorAll('[data-menu-key]');
 const workspaceContent = document.querySelector('.workspace__content');
 let liveEditor = null;
+let calendarPreviewEditor = null;
+let calendarVisibleMonth = new Date();
+let calendarNoticeTimer;
+
+const showCalendarNotice = (message) => {
+  let notice = document.querySelector('[data-calendar-notice]');
+  if (!notice) {
+    notice = document.createElement('div');
+    notice.className = 'calendar-notice';
+    notice.dataset.calendarNotice = '';
+    notice.setAttribute('role', 'status');
+    document.body.append(notice);
+  }
+  notice.textContent = message;
+  notice.classList.add('calendar-notice--visible');
+  window.clearTimeout(calendarNoticeTimer);
+  calendarNoticeTimer = window.setTimeout(() => notice.classList.remove('calendar-notice--visible'), 1800);
+};
 
 const updateMaximizeButton = (isMaximized) => {
   if (!maximizeButton || !maximizeIcon) return;
@@ -107,6 +215,9 @@ const bindTodayPage = () => {
   const locationButton = document.querySelector('[data-location-button]');
   const weatherStatus = document.querySelector('[data-weather-status]');
   const locationStatus = document.querySelector('[data-location-status]');
+  const moodButton = document.querySelector('[data-mood-button]');
+  const moodStatus = document.querySelector('[data-mood-status]');
+  const moodPicker = document.querySelector('[data-mood-picker]');
   const journalPage = document.querySelector('.journal-page');
   const journalDate = document.querySelector('[data-journal-date]');
   const entryDate = journalPage?.dataset.entryDate;
@@ -117,6 +228,7 @@ const bindTodayPage = () => {
   let contextFrozen = false;
   let contextResolved = false;
   let isLoadingEntry = true;
+  let mood = moods[0].emoji;
 
   const finishInitialLoad = () => {
     if (liveEditor !== editorForPage) return;
@@ -128,10 +240,23 @@ const bindTodayPage = () => {
     capturedAt: journalPage?.dataset.capturedAt,
     weatherText: weatherStatus?.textContent ?? '',
     locationText: locationStatus?.textContent ?? '',
+    mood,
     contextReady: contextResolved,
   });
 
+  const setMood = (value) => {
+    mood = moods.some((option) => option.emoji === value) ? value : '';
+    const selectedMood = moods.find((option) => option.emoji === mood);
+    if (moodStatus) moodStatus.textContent = selectedMood ? `${selectedMood.emoji} ${selectedMood.label}` : '选择心情';
+    moodPicker?.querySelectorAll('[data-mood]').forEach((button) => {
+      button.classList.toggle('mood-picker__option--selected', button.dataset.mood === mood);
+    });
+  };
+
+  setMood(mood);
+
   const applyMetadata = (metadata) => {
+    setMood(metadata?.mood || moods[0].emoji);
     if (!metadata?.capturedAt) return false;
     const capturedAt = new Date(metadata.capturedAt);
     if (Number.isNaN(capturedAt.getTime())) return false;
@@ -411,6 +536,7 @@ const bindTodayPage = () => {
     isRestoring = false;
     updateWordCount();
     if (!applyMetadata(entry.metadata)) refreshJournalContext();
+    if (!entry.metadata?.mood) scheduleSave();
     if (saveStatus) saveStatus.textContent = '已自动保存';
     finishInitialLoad();
   }).catch((error) => {
@@ -431,6 +557,126 @@ const bindTodayPage = () => {
   }));
   weatherButton?.addEventListener('click', refreshJournalContext);
   locationButton?.addEventListener('click', refreshJournalContext);
+  moodButton?.addEventListener('click', () => {
+    if (!moodPicker) return;
+    const willOpen = moodPicker.hidden;
+    moodPicker.hidden = !willOpen;
+    moodButton.setAttribute('aria-expanded', String(willOpen));
+  });
+  moodPicker?.querySelectorAll('[data-mood]').forEach((button) => {
+    button.addEventListener('click', () => {
+      setMood(button.dataset.mood);
+      moodPicker.hidden = true;
+      moodButton?.setAttribute('aria-expanded', 'false');
+      scheduleSave();
+    });
+  });
+};
+
+const bindCalendarPage = () => {
+  const calendarPageElement = document.querySelector('.calendar-page');
+  if (!calendarPageElement) return;
+
+  const visibleMonth = new Date(calendarVisibleMonth.getFullYear(), calendarVisibleMonth.getMonth(), 1);
+  const requestedMonth = formatEntryDate(visibleMonth);
+  window.journalStore.listMonth(visibleMonth.getFullYear(), visibleMonth.getMonth() + 1).then((entries) => {
+    if (document.querySelector('.calendar-page') !== calendarPageElement || calendarPageElement.dataset.calendarMonth !== requestedMonth) return;
+    const entriesByDate = new Map(entries.map((entry) => {
+      const normalizedEntry = typeof entry === 'string' ? { entryDate: entry, metadata: {} } : entry;
+      return [normalizedEntry.entryDate, normalizedEntry];
+    }));
+    calendarPageElement.querySelectorAll('[data-calendar-date]').forEach((day) => {
+      const entry = entriesByDate.get(day.dataset.calendarDate);
+      const hasEntry = Boolean(entry);
+      day.classList.toggle('calendar-day--has-entry', hasEntry);
+      day.querySelector('.calendar-day__mood')?.remove();
+      if (hasEntry) {
+        const mood = document.createElement('span');
+        mood.className = 'calendar-day__mood';
+        mood.textContent = entry.metadata?.mood || moods[0].emoji;
+        mood.setAttribute('aria-hidden', 'true');
+        day.append(mood);
+        day.setAttribute('aria-label', `${day.dataset.calendarDate}，已有日记`);
+      }
+    });
+    calendarPageElement.dataset.calendarLoaded = 'true';
+  }).catch((error) => console.error('Failed to load calendar entries', error));
+
+  document.querySelectorAll('[data-calendar-action]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const nextMonth = new Date(calendarVisibleMonth.getFullYear(), calendarVisibleMonth.getMonth(), 1);
+      if (button.dataset.calendarAction === 'previous') nextMonth.setMonth(nextMonth.getMonth() - 1);
+      if (button.dataset.calendarAction === 'next') nextMonth.setMonth(nextMonth.getMonth() + 1);
+      if (button.dataset.calendarAction === 'today') {
+        nextMonth.setFullYear(new Date().getFullYear(), new Date().getMonth(), 1);
+      }
+      calendarVisibleMonth = nextMonth;
+      workspaceContent.innerHTML = calendarPage(calendarVisibleMonth);
+      bindCalendarPage();
+    });
+  });
+
+  document.querySelectorAll('[data-calendar-date]').forEach((day) => {
+    day.addEventListener('dblclick', () => {
+      if (calendarPageElement.dataset.calendarLoaded !== 'true') {
+        showCalendarNotice('正在读取日记列表，请稍后再试');
+        return;
+      }
+      if (!day.classList.contains('calendar-day--has-entry')) {
+        showCalendarNotice('这一天还没有写日记');
+        return;
+      }
+      workspaceContent.innerHTML = calendarPreviewPage(day.dataset.calendarDate);
+      bindCalendarPreviewPage(day.dataset.calendarDate);
+      document.querySelector('[data-calendar-back]')?.addEventListener('click', () => {
+        calendarPreviewEditor?.destroy();
+        calendarPreviewEditor = null;
+        workspaceContent.innerHTML = calendarPage(calendarVisibleMonth);
+        bindCalendarPage();
+      });
+    });
+  });
+};
+
+const bindCalendarPreviewPage = (entryDate) => {
+  const content = document.querySelector('[data-calendar-preview-content]');
+  const status = document.querySelector('[data-calendar-preview-status]');
+  const element = document.querySelector('[data-calendar-preview-editor]');
+  const metadata = document.querySelector('[data-calendar-preview-meta]');
+  const weather = document.querySelector('[data-calendar-preview-weather]');
+  const location = document.querySelector('[data-calendar-preview-location]');
+  const mood = document.querySelector('[data-calendar-preview-mood]');
+  if (!content || !status || !element || !metadata || !weather || !location || !mood) return;
+
+  window.journalStore.load(entryDate).then((entry) => {
+    if (!document.contains(content)) return;
+    if (!entry) {
+      status.innerHTML = '<span class="calendar-preview__icon"><i class="bi bi-journal-text"></i></span><strong>这一天还没有写日记</strong><small>回到今天页面开始记录吧。</small>';
+      status.classList.add('calendar-preview__status--empty');
+      return;
+    }
+    status.remove();
+    weather.textContent = entry.metadata?.weatherText || '未记录天气';
+    location.textContent = entry.metadata?.locationText || '未记录位置';
+    const moodValue = entry.metadata?.mood || moods[0].emoji;
+    const selectedMood = moods.find((option) => option.emoji === moodValue) ?? moods[0];
+    mood.textContent = `${selectedMood.emoji} ${selectedMood.label}`;
+    metadata.hidden = false;
+    element.hidden = false;
+    calendarPreviewEditor = new Editor({
+      element,
+      editable: false,
+      extensions: [StarterKit, Image.configure({ inline: false, allowBase64: false }), Video],
+      content: entry.content,
+      editorProps: {
+        attributes: { class: 'ProseMirror', 'aria-label': `${entryDate} 日记` },
+      },
+    });
+  }).catch((error) => {
+    console.error('Failed to load calendar journal', error);
+    if (!document.contains(content)) return;
+    status.textContent = '读取日记失败';
+  });
 };
 
 const setActiveMenu = (menuKey) => {
@@ -438,8 +684,15 @@ const setActiveMenu = (menuKey) => {
   if (!menu || !workspaceContent) return;
   liveEditor?.destroy();
   liveEditor = null;
-  workspaceContent.innerHTML = menuKey === 'today' ? todayPage() : `<div class="page-view"><h1 class="page-view__title">${menu.label}</h1></div>`;
+  calendarPreviewEditor?.destroy();
+  calendarPreviewEditor = null;
+  workspaceContent.innerHTML = menuKey === 'today'
+    ? todayPage()
+    : menuKey === 'calendar'
+      ? calendarPage(calendarVisibleMonth)
+      : `<div class="page-view"><h1 class="page-view__title">${menu.label}</h1></div>`;
   if (menuKey === 'today') bindTodayPage();
+  if (menuKey === 'calendar') bindCalendarPage();
   menuButtons.forEach((button) => {
     const active = button.dataset.menuKey === menuKey;
     button.classList.toggle('sidebar__item--active', active);

@@ -68,6 +68,7 @@ export const createJournalStore = ({ dataDirectory }) => {
   database.prepare("INSERT INTO journal_metadata (key, value) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(schemaVersion);
 
   const selectEntry = database.prepare('SELECT * FROM journal_entries WHERE entry_date = ?');
+  const selectEntriesInRange = database.prepare('SELECT entry_date, metadata_json FROM journal_entries WHERE entry_date >= ? AND entry_date < ? ORDER BY entry_date');
   const upsertEntry = database.prepare(`INSERT INTO journal_entries (entry_date, content_json, plain_text, metadata_json, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(entry_date) DO UPDATE SET content_json = excluded.content_json, plain_text = excluded.plain_text, metadata_json = excluded.metadata_json, updated_at = excluded.updated_at`);
@@ -97,6 +98,18 @@ export const createJournalStore = ({ dataDirectory }) => {
         createdAt: entry.created_at,
         updatedAt: entry.updated_at,
       } : null;
+    },
+    listMonth(year, month) {
+      if (!Number.isInteger(year) || !Number.isInteger(month) || month < 1 || month > 12) {
+        throw new Error('Invalid journal month');
+      }
+      const start = `${year}-${String(month).padStart(2, '0')}-01`;
+      const nextMonth = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
+      const end = `${nextMonth.year}-${String(nextMonth.month).padStart(2, '0')}-01`;
+      return selectEntriesInRange.all(start, end).map((entry) => ({
+        entryDate: entry.entry_date,
+        metadata: JSON.parse(entry.metadata_json || '{}'),
+      }));
     },
     save({ entryDate, content, plainText = '', metadata = {} }) {
       validateEntryDate(entryDate);
