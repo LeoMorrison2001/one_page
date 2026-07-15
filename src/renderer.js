@@ -178,6 +178,78 @@ const reviewPage = () => `
   </section>
 `;
 
+const settingsPage = () => `
+  <section class="settings-page">
+    <header class="settings-page__header">
+      <h1 class="settings-page__title">设置</h1>
+    </header>
+    <div class="settings-groups">
+      <section class="settings-group">
+        <h2>外观</h2>
+        <div class="settings-row settings-row--stacked">
+          <div><strong>主题</strong><span>选择你偏好的显示方式</span></div>
+          <div class="theme-options" role="group" aria-label="主题">
+            <button type="button" data-theme-option="light">浅色</button>
+            <button type="button" data-theme-option="dark">深色</button>
+            <button type="button" data-theme-option="system">跟随系统</button>
+          </div>
+        </div>
+      </section>
+      <section class="settings-group">
+        <h2>数据与隐私</h2>
+        <div class="settings-row">
+          <div><strong>数据保存位置</strong><span data-settings-data-path>正在读取…</span></div>
+          <button class="settings-button" type="button" data-settings-action="change-path">更改位置</button>
+        </div>
+        <div class="settings-row">
+          <div><strong>导出数据</strong><span>导出包含日记和媒体文件的 ZIP 备份</span></div>
+          <button class="settings-button" type="button" data-settings-action="export">导出 ZIP</button>
+        </div>
+        <div class="settings-row">
+          <div><strong>导入数据</strong><span>从 ZIP 备份恢复，导入将替换当前数据</span></div>
+          <button class="settings-button" type="button" data-settings-action="import">导入 ZIP</button>
+        </div>
+        <div class="settings-row">
+          <div><strong>格式化数据</strong><span>永久删除所有日记、图片和视频，主题与保存位置设置会保留</span></div>
+          <button class="settings-button settings-button--danger" type="button" data-settings-action="reset-data">格式化数据</button>
+        </div>
+      </section>
+      <section class="settings-group">
+        <h2>关于</h2>
+        <div class="settings-row">
+          <div><strong>一页</strong><span>用日记记录生活和想法</span></div>
+          <span class="settings-version" data-settings-version>—</span>
+        </div>
+        <p class="settings-note">这是一本属于你的日记。记录每天的心情、生活片段和那些值得留下的想法。</p>
+      </section>
+    </div>
+    <p class="settings-feedback" data-settings-feedback aria-live="polite"></p>
+    <div class="settings-modal" data-confirm-modal hidden role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title" aria-describedby="confirm-modal-message">
+      <div class="settings-modal__panel" role="document">
+        <h2 id="confirm-modal-title" data-confirm-title>确认操作？</h2>
+        <p id="confirm-modal-message" data-confirm-message></p>
+        <div class="settings-modal__actions">
+          <button class="settings-button" type="button" data-confirm-cancel>取消</button>
+          <button class="settings-button settings-button--danger" type="button" data-confirm-proceed>继续</button>
+        </div>
+      </div>
+    </div>
+    <div class="settings-modal" data-reset-modal hidden role="dialog" aria-modal="true" aria-labelledby="reset-modal-title">
+      <div class="settings-modal__panel">
+        <h2 id="reset-modal-title">格式化所有数据？</h2>
+        <p>这会永久删除当前保存位置中的全部日记、图片和视频，无法撤销。</p>
+        <label>请输入 <strong>确认格式化</strong> 以继续
+          <input type="text" data-reset-confirmation autocomplete="off" placeholder="确认格式化">
+        </label>
+        <div class="settings-modal__actions">
+          <button class="settings-button" type="button" data-reset-cancel>取消</button>
+          <button class="settings-button settings-button--danger" type="button" data-reset-confirm disabled>确认格式化</button>
+        </div>
+      </div>
+    </div>
+  </section>
+`;
+
 const todayPage = () => {
   const openedAt = new Date();
   return `
@@ -235,6 +307,13 @@ let liveEditor = null;
 let calendarPreviewEditor = null;
 let calendarVisibleMonth = new Date();
 let calendarNoticeTimer;
+
+const applyTheme = (theme) => {
+  const resolvedTheme = theme === 'system'
+    ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+    : theme;
+  document.documentElement.dataset.theme = resolvedTheme;
+};
 
 const showCalendarNotice = (message) => {
   let notice = document.querySelector('[data-calendar-notice]');
@@ -950,6 +1029,151 @@ const bindReviewPage = () => {
   });
 };
 
+const bindSettingsPage = () => {
+  const pathElement = document.querySelector('[data-settings-data-path]');
+  const versionElement = document.querySelector('[data-settings-version]');
+  const feedback = document.querySelector('[data-settings-feedback]');
+  const confirmModal = document.querySelector('[data-confirm-modal]');
+  const confirmTitle = document.querySelector('[data-confirm-title]');
+  const confirmMessage = document.querySelector('[data-confirm-message]');
+  const confirmProceed = document.querySelector('[data-confirm-proceed]');
+  const resetModal = document.querySelector('[data-reset-modal]');
+  const resetInput = document.querySelector('[data-reset-confirmation]');
+  const resetConfirm = document.querySelector('[data-reset-confirm]');
+  if (!pathElement || !versionElement || !feedback || !confirmModal || !confirmTitle || !confirmMessage || !confirmProceed || !resetModal || !resetInput || !resetConfirm) return;
+
+  let confirmResolver = null;
+  let confirmOpener = null;
+
+  const closeConfirmModal = (confirmed) => {
+    if (confirmModal.hidden) return;
+    confirmModal.hidden = true;
+    const resolve = confirmResolver;
+    confirmResolver = null;
+    resolve?.(confirmed);
+    confirmOpener?.focus();
+    confirmOpener = null;
+  };
+
+  const showConfirmModal = ({ title, message, confirmLabel }) => new Promise((resolve) => {
+    confirmOpener = document.activeElement;
+    confirmTitle.textContent = title;
+    confirmMessage.textContent = message;
+    confirmProceed.textContent = confirmLabel;
+    confirmResolver = resolve;
+    confirmModal.hidden = false;
+    confirmProceed.focus();
+  });
+
+  const setFeedback = (message, isError = false) => {
+    feedback.textContent = message;
+    feedback.classList.toggle('settings-feedback--error', isError);
+  };
+
+  const syncSettings = async () => {
+    const settings = await window.appSettings.get();
+    if (document.querySelector('[data-settings-data-path]') !== pathElement) return settings;
+    pathElement.textContent = settings.dataDirectory;
+    versionElement.textContent = `版本 ${settings.version}`;
+    document.querySelectorAll('[data-theme-option]').forEach((button) => {
+      const selected = button.dataset.themeOption === settings.theme;
+      button.classList.toggle('theme-options__button--active', selected);
+      button.setAttribute('aria-pressed', String(selected));
+    });
+    applyTheme(settings.theme);
+    return settings;
+  };
+
+  document.querySelectorAll('[data-theme-option]').forEach((button) => {
+    button.addEventListener('click', async () => {
+      try {
+        const settings = await window.appSettings.setTheme(button.dataset.themeOption);
+        applyTheme(settings.theme);
+        await syncSettings();
+        setFeedback('主题已更新');
+      } catch (error) {
+        setFeedback('主题更新失败', true);
+      }
+    });
+  });
+  document.querySelector('[data-settings-action="change-path"]')?.addEventListener('click', async () => {
+    const confirmed = await showConfirmModal({
+      title: '更改数据保存位置？',
+      message: '数据会迁移到新位置；迁移成功后会删除旧位置中的日记数据库和媒体文件。',
+      confirmLabel: '继续更改',
+    });
+    if (!confirmed) return;
+    try {
+      const result = await window.appSettings.chooseDataDirectory();
+      if (result.canceled) return;
+      setFeedback('数据已迁移，正在重新加载…');
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to migrate journal data', error);
+      setFeedback(`迁移失败：${error.message || '请检查新位置是否为空'}`, true);
+    }
+  });
+  document.querySelector('[data-settings-action="export"]')?.addEventListener('click', async () => {
+    try {
+      const result = await window.appSettings.exportData();
+      if (!result.canceled) setFeedback('备份导出完成');
+    } catch (error) {
+      console.error('Failed to export journal data', error);
+      setFeedback('导出失败', true);
+    }
+  });
+  document.querySelector('[data-settings-action="import"]')?.addEventListener('click', async () => {
+    const confirmed = await showConfirmModal({
+      title: '导入备份数据？',
+      message: '导入会替换当前所有日记和媒体数据。建议先导出备份后再继续。',
+      confirmLabel: '继续导入',
+    });
+    if (!confirmed) return;
+    try {
+      const result = await window.appSettings.importData();
+      if (result.canceled) return;
+      setFeedback('数据导入完成，正在重新加载…');
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to import journal data', error);
+      setFeedback(`导入失败：${error.message || '备份文件无效'}`, true);
+    }
+  });
+  document.querySelector('[data-settings-action="reset-data"]')?.addEventListener('click', async () => {
+    resetInput.value = '';
+    resetConfirm.disabled = true;
+    resetModal.hidden = false;
+    resetInput.focus();
+  });
+  document.querySelector('[data-reset-cancel]')?.addEventListener('click', () => {
+    resetModal.hidden = true;
+  });
+  document.querySelector('[data-confirm-cancel]')?.addEventListener('click', () => closeConfirmModal(false));
+  confirmProceed.addEventListener('click', () => closeConfirmModal(true));
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (!confirmModal.hidden) closeConfirmModal(false);
+    else if (!resetModal.hidden) resetModal.hidden = true;
+  });
+  resetInput.addEventListener('input', () => {
+    resetConfirm.disabled = resetInput.value !== '确认格式化';
+  });
+  resetConfirm.addEventListener('click', async () => {
+    if (resetInput.value !== '确认格式化') return;
+    try {
+      resetConfirm.disabled = true;
+      await window.appSettings.resetData();
+      setFeedback('数据已格式化，正在重新加载…');
+      window.location.reload();
+    } catch (error) {
+      console.error('Failed to reset journal data', error);
+      setFeedback('格式化数据失败', true);
+      resetConfirm.disabled = false;
+    }
+  });
+  syncSettings().catch((error) => setFeedback('设置读取失败', true));
+};
+
 const setActiveMenu = (menuKey) => {
   const menu = menus.find((item) => item.key === menuKey);
   if (!menu || !workspaceContent) return;
@@ -967,12 +1191,15 @@ const setActiveMenu = (menuKey) => {
           ? favoritesPage()
           : menuKey === 'review'
             ? reviewPage()
+            : menuKey === 'settings'
+              ? settingsPage()
           : `<div class="page-view"><h1 class="page-view__title">${menu.label}</h1></div>`;
   if (menuKey === 'today') bindTodayPage();
   if (menuKey === 'calendar') bindCalendarPage();
   if (menuKey === 'timeline') bindTimelinePage();
   if (menuKey === 'favorites') bindFavoritesPage();
   if (menuKey === 'review') bindReviewPage();
+  if (menuKey === 'settings') bindSettingsPage();
   menuButtons.forEach((button) => {
     const active = button.dataset.menuKey === menuKey;
     button.classList.toggle('sidebar__item--active', active);
@@ -987,3 +1214,4 @@ menuButtons.forEach((button) => button.addEventListener('click', () => setActive
 bindTodayPage();
 window.windowControls.isMaximized().then(updateMaximizeButton);
 window.windowControls.onMaximizedChanged(updateMaximizeButton);
+window.appSettings.get().then((settings) => applyTheme(settings.theme));

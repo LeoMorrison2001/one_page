@@ -1,4 +1,6 @@
-import { app, BrowserWindow, ipcMain, net, protocol, session } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, net, protocol, session } from 'electron';
+import AdmZip from 'adm-zip';
+import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import started from 'electron-squirrel-startup';
@@ -28,10 +30,10 @@ let mainWindow = null;
 const createWindow = () => {
   // Create the browser window.
   mainWindow = new BrowserWindow({
-    width: 1100,
-    height: 720,
-    minWidth: 1000,
-    minHeight: 680,
+    width: 1200,
+    height: 820,
+    minWidth: 1200,
+    minHeight: 820,
     frame: false,
     titleBarStyle: 'hidden',
     backgroundColor: '#181818',
@@ -59,6 +61,159 @@ const createWindow = () => {
 
 let journalStore;
 let journalStoreError = '';
+let journalDataDirectory = '';
+let settingsPath = '';
+let appSettings = { theme: 'light', dataDirectory: null };
+
+const journalDataParts = ['journal', 'journal-media'];
+
+const readAppSettings = () => {
+  try {
+    return { ...appSettings, ...JSON.parse(fs.readFileSync(settingsPath, 'utf8')) };
+  } catch {
+    return { ...appSettings };
+  }
+};
+
+const saveAppSettings = () => {
+  fs.writeFileSync(settingsPath, JSON.stringify(appSettings, null, 2), { encoding: 'utf8', mode: 0o600 });
+};
+
+const normalizedDirectory = (directory) => path.resolve(directory);
+
+const dataPartPath = (directory, part) => path.join(directory, part);
+
+const deleteJournalData = (directory) => {
+  journalDataParts.forEach((part) => fs.rmSync(dataPartPath(directory, part), { recursive: true, force: true }));
+};
+
+const copyJournalData = (sourceDirectory, destinationDirectory) => {
+  for (const part of journalDataParts) {
+    const source = dataPartPath(sourceDirectory, part);
+    const destination = dataPartPath(destinationDirectory, part);
+    if (fs.existsSync(source)) fs.cpSync(source, destination, { recursive: true, errorOnExist: true, force: false });
+  }
+};
+
+const configureJournalStore = (dataDirectory) => {
+  journalStore?.close();
+  journalStore = createJournalStore({ dataDirectory });
+  journalDataDirectory = dataDirectory;
+};
+
+const getSettingsSnapshot = () => ({
+  theme: appSettings.theme,
+  dataDirectory: journalDataDirectory,
+  defaultDataDirectory: app.getPath('userData'),
+  version: app.getVersion(),
+});
+
+const migrateJournalData = (targetDirectory) => {
+  const source = normalizedDirectory(journalDataDirectory);
+  const target = normalizedDirectory(targetDirectory);
+  if (source === target) return getSettingsSnapshot();
+  if (target.startsWith(`${source}${path.sep}`) || source.startsWith(`${target}${path.sep}`)) {
+    throw new Error('新保存位置不能包含旧保存位置，或被旧保存位置包含');
+  }
+  fs.mkdirSync(target, { recursive: true });
+  if (journalDataParts.some((part) => fs.existsSync(dataPartPath(target, part)))) {
+    throw new Error('新保存位置中已存在一页的数据，请选择空文件夹');
+  }
+
+  const previousSettings = { ...appSettings };
+  journalStore?.close();
+  journalStore = undefined;
+  try {
+    copyJournalData(source, target);
+    journalStore = createJournalStore({ dataDirectory: target });
+    journalDataDirectory = target;
+    appSettings = { ...appSettings, dataDirectory: target };
+    saveAppSettings();
+    deleteJournalData(source);
+    return getSettingsSnapshot();
+  } catch (error) {
+    journalStore?.close();
+    journalStore = createJournalStore({ dataDirectory: source });
+    journalDataDirectory = source;
+    appSettings = previousSettings;
+    throw error;
+  }
+};
+
+const exportJournalData = async () => {
+  const defaultName = `一页备份-${new Date().toISOString().slice(0, 10)}.zip`;
+  const result = await dialog.showSaveDialog({
+    title: '导出一页数据',
+    defaultPath: path.join(app.getPath('documents'), defaultName),
+    filters: [{ name: 'ZIP 备份', extensions: ['zip'] }],
+  });
+  if (result.canceled || !result.filePath) return { canceled: true };
+  const archive = new AdmZip();
+  archive.addFile('manifest.json', Buffer.from(JSON.stringify({ format: 'one-page-backup', version: 1, exportedAt: new Date().toISOString() }, null, 2)));
+  for (const part of journalDataParts) {
+    const source = dataPartPath(journalDataDirectory, part);
+    if (fs.existsSync(source)) archive.addLocalFolder(source, part);
+  }
+  archive.writeZip(result.filePath);
+  return { canceled: false, filePath: result.filePath };
+};
+
+const importJournalData = async () => {
+  const result = await dialog.showOpenDialog({
+    title: '导入一页备份',
+    properties: ['openFile'],
+    filters: [{ name: 'ZIP 备份', extensions: ['zip'] }],
+  });
+  if (result.canceled || !result.filePaths[0]) return { canceled: true };
+
+  const temporaryDirectory = path.join(app.getPath('temp'), `one-page-import-${Date.now()}`);
+  const rollbackDirectory = path.join(temporaryDirectory, 'rollback');
+  try {
+    const archive = new AdmZip(result.filePaths[0]);
+    if (archive.getEntries().some((entry) => entry.entryName.includes('..'))) throw new Error('备份文件路径无效');
+    const manifestEntry = archive.getEntry('manifest.json');
+    if (!manifestEntry) throw new Error('不是有效的一页备份文件');
+    const manifest = JSON.parse(manifestEntry.getData().toString('utf8'));
+    if (manifest.format !== 'one-page-backup' || manifest.version !== 1 || !archive.getEntry('journal/journal.db')) {
+      throw new Error('不是有效的一页备份文件');
+    }
+    archive.extractAllTo(temporaryDirectory, true);
+    fs.mkdirSync(rollbackDirectory, { recursive: true });
+    journalStore?.close();
+    journalStore = undefined;
+    copyJournalData(journalDataDirectory, rollbackDirectory);
+    deleteJournalData(journalDataDirectory);
+    copyJournalData(temporaryDirectory, journalDataDirectory);
+    journalStore = createJournalStore({ dataDirectory: journalDataDirectory });
+    return { canceled: false };
+  } catch (error) {
+    journalStore?.close();
+    if (fs.existsSync(rollbackDirectory)) {
+      deleteJournalData(journalDataDirectory);
+      copyJournalData(rollbackDirectory, journalDataDirectory);
+    }
+    journalStore = createJournalStore({ dataDirectory: journalDataDirectory });
+    throw error;
+  } finally {
+    fs.rmSync(temporaryDirectory, { recursive: true, force: true });
+  }
+};
+
+const resetJournalData = async () => {
+  journalStore?.close();
+  journalStore = undefined;
+  try {
+    deleteJournalData(journalDataDirectory);
+    journalStore = createJournalStore({ dataDirectory: journalDataDirectory });
+    await session.defaultSession.clearCache();
+    await session.defaultSession.clearStorageData();
+    return { reset: true };
+  } catch (error) {
+    journalStore?.close();
+    journalStore = createJournalStore({ dataDirectory: journalDataDirectory });
+    throw error;
+  }
+};
 
 // This method will be called when Electron has finished
 // initialization and is ready to create browser windows.
@@ -82,7 +237,9 @@ app.whenReady().then(() => {
   });
 
   try {
-    journalStore = createJournalStore({ dataDirectory: app.getPath('userData') });
+    settingsPath = path.join(app.getPath('userData'), 'settings.json');
+    appSettings = readAppSettings();
+    configureJournalStore(normalizedDirectory(appSettings.dataDirectory || app.getPath('userData')));
     protocol.handle('journal-media', (request) => {
       const mediaPath = journalStore.resolveMediaPath(request.url);
       return mediaPath ? net.fetch(pathToFileURL(mediaPath).toString()) : new Response('Not found', { status: 404 });
@@ -116,6 +273,25 @@ ipcMain.handle('journal:status', () => ({
   available: Boolean(journalStore),
   error: journalStoreError,
 }));
+ipcMain.handle('settings:get', () => getSettingsSnapshot());
+ipcMain.handle('settings:set-theme', (_event, theme) => {
+  if (!['light', 'dark', 'system'].includes(theme)) throw new Error('Invalid theme');
+  appSettings = { ...appSettings, theme };
+  saveAppSettings();
+  return getSettingsSnapshot();
+});
+ipcMain.handle('settings:choose-data-directory', async () => {
+  const selection = await dialog.showOpenDialog({
+    title: '选择一页数据保存位置',
+    defaultPath: journalDataDirectory,
+    properties: ['openDirectory', 'createDirectory'],
+  });
+  if (selection.canceled || !selection.filePaths[0]) return { canceled: true };
+  return { canceled: false, settings: migrateJournalData(selection.filePaths[0]) };
+});
+ipcMain.handle('settings:export-data', exportJournalData);
+ipcMain.handle('settings:import-data', importJournalData);
+ipcMain.handle('settings:reset-data', resetJournalData);
 
 ipcMain.on('window:minimize', (event) => {
   const window = BrowserWindow.fromWebContents(event.sender);

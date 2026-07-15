@@ -15,6 +15,204 @@
   --page-content-width: 1400px;
 }
 
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg-0: #181818;
+  --bg-1: #202020;
+  --bg-2: #1b1b1b;
+  --line: rgba(255, 255, 255, 0.1);
+  --text: #ededed;
+}
+
+:root[data-theme='dark'] .workspace,
+:root[data-theme='dark'] .sidebar,
+:root[data-theme='dark'] .titlebar,
+:root[data-theme='dark'] .window-shell {
+  background: #202020;
+}
+
+:root[data-theme='dark'] .workspace__content {
+  border-color: #343434;
+  background: #252525;
+}
+
+:root[data-theme='dark'] .sidebar__item,
+:root[data-theme='dark'] .window-button,
+:root[data-theme='dark'] .titlebar__brand {
+  color: #ededed;
+}
+
+:root[data-theme='dark'] .sidebar__item:hover,
+:root[data-theme='dark'] .sidebar__item--active,
+:root[data-theme='dark'] .window-button:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+:root[data-theme='dark'] .journal-page__date,
+:root[data-theme='dark'] .calendar-page__title,
+:root[data-theme='dark'] .calendar-preview__title,
+:root[data-theme='dark'] .timeline-page__title,
+:root[data-theme='dark'] .favorites-page__title,
+:root[data-theme='dark'] .review-page__title,
+:root[data-theme='dark'] .settings-page__title,
+:root[data-theme='dark'] .page-view__title {
+  color: #f1f1f1;
+}
+
+:root[data-theme='dark'] .journal-editor,
+:root[data-theme='dark'] .calendar-shell,
+:root[data-theme='dark'] .calendar-day,
+:root[data-theme='dark'] .timeline-card,
+:root[data-theme='dark'] .favorite-card,
+:root[data-theme='dark'] .review-card,
+:root[data-theme='dark'] .settings-group,
+:root[data-theme='dark'] .review-summary > div,
+:root[data-theme='dark'] .calendar-preview__content,
+:root[data-theme='dark'] .journal-meta__item,
+:root[data-theme='dark'] .calendar-action,
+:root[data-theme='dark'] .calendar-preview__back,
+:root[data-theme='dark'] .journal-favorite,
+:root[data-theme='dark'] .settings-button,
+:root[data-theme='dark'] .theme-options button {
+  border-color: #414141;
+  background: #2b2b2b;
+  color: #d9d9d9;
+}
+
+:root[data-theme='dark'] .calendar-weekdays,
+:root[data-theme='dark'] .calendar-day--outside {
+  background: #282828;
+}
+
+:root[data-theme='dark'] .calendar-weekdays {
+  border-bottom-color: #414141;
+}
+
+:root[data-theme='dark'] .calendar-day {
+  border-right-color: #3d3d3d;
+  border-bottom-color: #3d3d3d;
+}
+
+:root[data-theme='dark'] .calendar-day,
+:root[data-theme='dark'] .calendar-weekdays,
+:root[data-theme='dark'] .settings-group h2,
+:root[data-theme='dark'] .settings-row strong,
+:root[data-theme='dark'] .favorite-item__date strong,
+:root[data-theme='dark'] .timeline-entry__date strong,
+:root[data-theme='dark'] .review-section__heading h2 {
+  color: #e1e1e1;
+}
+
+:root[data-theme='dark'] .notion-editor .ProseMirror,
+:root[data-theme='dark'] .calendar-preview__editor .ProseMirror,
+:root[data-theme='dark'] .timeline-card,
+:root[data-theme='dark'] .favorite-card,
+:root[data-theme='dark'] .review-card {
+  color: #dcdcdc;
+}
+
+:root[data-theme='dark'] .journal-editor__footer,
+:root[data-theme='dark'] .settings-group h2,
+:root[data-theme='dark'] .settings-row + .settings-row {
+  border-color: #3c3c3c;
+}
+
+:root[data-theme='dark'] .settings-row strong,
+:root[data-theme='dark'] .settings-group h2,
+:root[data-theme='dark'] .settings-modal__panel h2 {
+  color: #ededed;
+}
+
+:root[data-theme='dark'] .settings-row span:not(.settings-version),
+:root[data-theme='dark'] .settings-note,
+:root[data-theme='dark'] .settings-modal__panel p,
+:root[data-theme='dark'] .settings-modal__panel label {
+  color: #ababab;
+}
+
+:root[data-theme='dark'] .settings-modal {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+:root[data-theme='dark'] .settings-modal__panel {
+  border-color: #454545;
+  background: #2b2b2b;
+}
+
+:root[data-theme='dark'] .settings-modal__panel input {
+  border-color: #4b4b4b;
+  background: #202020;
+  color: #ededed;
+}
+
+:root[data-theme='dark'] .settings-modal__panel input::placeholder {
+  color: #858585;
+}
+
+:root[data-theme='dark'] .theme-options__button--active {
+  border-color: #5f7d69 !important;
+  background: #314239 !important;
+  color: #d3e8d9 !important;
+}
+
+:root[data-theme='dark'] .favorites-page__subtitle,
+:root[data-theme='dark'] .favorite-item__date span,
+:root[data-theme='dark'] .favorite-card__top,
+:root[data-theme='dark'] .favorites-empty p {
+  color: #9a9a9a;
+}
+
+:root[data-theme='dark'] .favorite-item__date strong,
+:root[data-theme='dark'] .favorites-empty strong {
+  color: #e5e5e5;
+}
+
+:root[data-theme='dark'] .favorite-card {
+  border-color: #3d3d3d;
+  background: #2a2a2a;
+  color: #dedede;
+}
+
+:root[data-theme='dark'] .favorite-card:hover {
+  border-color: #505050;
+  background: #2e2e2e;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+}
+
+:root[data-theme='dark'] .favorite-card p {
+  color: #d0d0d0;
+}
+
+:root[data-theme='dark'] .favorite-card__mood,
+:root[data-theme='dark'] .favorite-card__more {
+  color: #a6c7ae;
+}
+
+:root[data-theme='dark'] .favorites-empty {
+  border-color: #444;
+  background: #282828;
+  color: #9a9a9a;
+}
+
+:root[data-theme='dark'] .favorites-empty > span {
+  background: #343a36;
+  color: #a6c7ae;
+}
+
+:root[data-theme='dark'] .journal-page__status {
+  border: 1px solid #405447;
+  background: #29362e;
+  color: #b8d9c0;
+}
+
+:root[data-theme='dark'] .journal-editor__footer {
+  color: #999;
+}
+
+:root[data-theme='dark'] .journal-editor__footer i {
+  color: #8db99a;
+}
+
 html,
 body {
   margin: 0;
@@ -224,6 +422,235 @@ button {
   margin: 0 auto;
   overflow-y: auto;
   padding-right: 10px;
+}
+
+.settings-page {
+  position: relative;
+  width: min(100%, var(--page-content-width));
+  height: 100%;
+  min-height: 0;
+  margin: 0 auto;
+  overflow-y: auto;
+  padding-right: 10px;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.settings-page::-webkit-scrollbar {
+  display: none;
+}
+
+.settings-page__header {
+  margin-bottom: 28px;
+}
+
+.settings-page__title {
+  margin: 0;
+  color: #202020;
+  font-size: var(--page-title-size);
+  font-weight: 650;
+  letter-spacing: var(--page-title-tracking);
+}
+
+.settings-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.settings-group {
+  overflow: hidden;
+  border: 1px solid #e8e8e8;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.settings-group h2 {
+  margin: 0;
+  padding: 15px 18px;
+  border-bottom: 1px solid #efefef;
+  color: #555;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings-row {
+  display: flex;
+  min-height: 76px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 14px 18px;
+}
+
+.settings-row + .settings-row {
+  border-top: 1px solid #f0f0f0;
+}
+
+.settings-row--stacked {
+  min-height: 88px;
+}
+
+.settings-row strong {
+  display: block;
+  color: #3e3e3e;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.settings-row span:not(.settings-version) {
+  display: block;
+  max-width: 700px;
+  margin-top: 6px;
+  overflow: hidden;
+  color: #999;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-button,
+.theme-options button {
+  flex: none;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid #e1e1e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #666;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+
+.settings-button:hover,
+.theme-options button:hover {
+  border-color: #d2d2d2;
+  background: #fafafa;
+}
+
+.settings-button--danger {
+  border-color: #e7c3c3;
+  color: #a85e5e;
+}
+
+.settings-button--danger:hover {
+  border-color: #dca9a9;
+  background: #fff7f7;
+}
+
+.theme-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.theme-options__button--active {
+  border-color: #b7cbb9 !important;
+  background: #f3f8f3 !important;
+  color: #53715a !important;
+}
+
+.settings-version {
+  flex: none;
+  color: #999;
+  font-size: 12px;
+}
+
+.settings-note {
+  margin: 0;
+  padding: 0 18px 16px;
+  color: #9a9a9a;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.settings-feedback {
+  min-height: 20px;
+  margin: 16px 0 0;
+  color: #698870;
+  font-size: 12px;
+}
+
+.settings-feedback--error {
+  color: #a26868;
+}
+
+.settings-modal {
+  position: fixed;
+  z-index: 20;
+  inset: 34px 0 0 220px;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(2px);
+}
+
+.settings-modal[hidden] {
+  display: none;
+}
+
+.settings-modal__panel {
+  width: min(100%, 400px);
+  padding: 24px;
+  border: 1px solid #e4e4e4;
+  border-radius: 15px;
+  background: #fff;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
+}
+
+.settings-modal__panel h2 {
+  margin: 0;
+  color: #333;
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.settings-modal__panel p {
+  margin: 12px 0 20px;
+  color: #777;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.settings-modal__panel label {
+  display: block;
+  color: #666;
+  font-size: 13px;
+}
+
+.settings-modal__panel label strong {
+  color: #a85e5e;
+}
+
+.settings-modal__panel input {
+  width: 100%;
+  height: 38px;
+  margin-top: 9px;
+  padding: 0 11px;
+  border: 1px solid #dedede;
+  border-radius: 8px;
+  outline: 0;
+  color: #333;
+  font: inherit;
+}
+
+.settings-modal__panel input:focus {
+  border-color: #c98b8b;
+  box-shadow: 0 0 0 3px rgba(201, 139, 139, 0.15);
+}
+
+.settings-modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 22px;
+}
+
+.settings-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
 }
 
 .review-page__header {
@@ -1439,6 +1866,10 @@ button {
 @media (max-width: 640px) {
   .workspace {
     grid-template-columns: 180px 1fr;
+  }
+
+  .settings-modal {
+    left: 180px;
   }
 
   .window-button {

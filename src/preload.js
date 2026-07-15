@@ -32,3 +32,12 @@ contextBridge.exposeInMainWorld('journalStore', {
     filePath: webUtils.getPathForFile(file),
   }),
 });
+
+contextBridge.exposeInMainWorld('appSettings', {
+  get: () => ipcRenderer.invoke('settings:get'),
+  setTheme: (theme) => ipcRenderer.invoke('settings:set-theme', theme),
+  chooseDataDirectory: () => ipcRenderer.invoke('settings:choose-data-directory'),
+  exportData: () => ipcRenderer.invoke('settings:export-data'),
+  importData: () => ipcRenderer.invoke('settings:import-data'),
+  resetData: () => ipcRenderer.invoke('settings:reset-data'),
+});
