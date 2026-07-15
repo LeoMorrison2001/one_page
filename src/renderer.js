@@ -114,7 +114,10 @@ const calendarPreviewPage = (entryDate, backLabel = '返回日历') => {
     <section class="calendar-preview">
       <header class="calendar-preview__header">
         <h1 class="calendar-preview__title">${formatToday(selectedDate).replace(/ \d{2}:\d{2}:\d{2}$/, '')}</h1>
-        <button class="calendar-preview__back" type="button" data-calendar-back><i class="bi bi-arrow-left"></i> ${backLabel}</button>
+        <div class="calendar-preview__actions">
+          <button class="journal-favorite" type="button" data-preview-favorite aria-label="收藏日记" aria-pressed="false"><i class="bi bi-bookmark"></i></button>
+          <button class="calendar-preview__back" type="button" data-calendar-back><i class="bi bi-arrow-left"></i> ${backLabel}</button>
+        </div>
       </header>
       <div class="calendar-preview__meta" data-calendar-preview-meta hidden>
         <span><i class="bi bi-cloud-sun"></i><span data-calendar-preview-weather></span></span>
@@ -144,13 +147,30 @@ const timelinePage = () => `
   </section>
 `;
 
+const favoritesPage = () => `
+  <section class="favorites-page">
+    <header class="favorites-page__header">
+      <div>
+        <h1 class="favorites-page__title">收藏</h1>
+        <p class="favorites-page__subtitle" data-favorites-count>正在读取收藏…</p>
+      </div>
+    </header>
+    <div class="favorites-scroll" data-favorites-scroll>
+      <div class="favorites-list" data-favorites-list></div>
+    </div>
+  </section>
+`;
+
 const todayPage = () => {
   const openedAt = new Date();
   return `
   <article class="journal-page" data-entry-date="${formatEntryDate(openedAt)}" data-captured-at="${openedAt.toISOString()}">
     <header class="journal-page__header">
       <div><h1 class="journal-page__date" data-journal-date>${formatToday(openedAt)}</h1></div>
-      <div class="journal-page__status" aria-live="polite"><i class="bi bi-cloud-check"></i><span data-save-status>未保存</span></div>
+      <div class="journal-page__header-actions">
+        <button class="journal-favorite" type="button" data-today-favorite aria-label="收藏日记" aria-pressed="false"><i class="bi bi-bookmark"></i></button>
+        <div class="journal-page__status" aria-live="polite"><i class="bi bi-cloud-check"></i><span data-save-status>未保存</span></div>
+      </div>
     </header>
     <div class="journal-meta" aria-label="日记信息">
       <button class="journal-meta__item" type="button" data-weather-button aria-label="重新获取天气"><i class="bi bi-cloud-sun"></i><span data-weather-status>正在获取天气</span></button>
@@ -220,6 +240,14 @@ const updateMaximizeButton = (isMaximized) => {
   maximizeIcon.className = isMaximized ? 'bi bi-app' : 'bi bi-square';
 };
 
+const updateFavoriteButton = (button, isFavorite) => {
+  if (!button) return;
+  button.setAttribute('aria-label', isFavorite ? '取消收藏日记' : '收藏日记');
+  button.setAttribute('aria-pressed', String(isFavorite));
+  const icon = button.querySelector('i');
+  if (icon) icon.className = isFavorite ? 'bi bi-bookmark-fill' : 'bi bi-bookmark';
+};
+
 const bindTodayPage = () => {
   const element = document.querySelector('[data-tiptap-editor]');
   const shell = document.querySelector('.notion-editor-shell');
@@ -233,6 +261,7 @@ const bindTodayPage = () => {
   const moodButton = document.querySelector('[data-mood-button]');
   const moodStatus = document.querySelector('[data-mood-status]');
   const moodPicker = document.querySelector('[data-mood-picker]');
+  const favoriteButton = document.querySelector('[data-today-favorite]');
   const journalPage = document.querySelector('.journal-page');
   const journalDate = document.querySelector('[data-journal-date]');
   const entryDate = journalPage?.dataset.entryDate;
@@ -542,6 +571,7 @@ const bindTodayPage = () => {
     if (liveEditor !== editorForPage) return;
     if (!entry) {
       if (saveStatus && !entry) saveStatus.textContent = '未保存';
+      updateFavoriteButton(favoriteButton, false);
       finishInitialLoad();
       refreshJournalContext();
       return;
@@ -551,9 +581,10 @@ const bindTodayPage = () => {
     isRestoring = false;
     updateWordCount();
     if (!applyMetadata(entry.metadata)) refreshJournalContext();
-    if (!entry.metadata?.mood) scheduleSave();
     if (saveStatus) saveStatus.textContent = '已自动保存';
+    updateFavoriteButton(favoriteButton, entry.isFavorite);
     finishInitialLoad();
+    if (!entry.metadata?.mood) scheduleSave();
   }).catch((error) => {
     if (liveEditor !== editorForPage) return;
     console.error('Failed to load journal', error);
@@ -585,6 +616,15 @@ const bindTodayPage = () => {
       moodButton?.setAttribute('aria-expanded', 'false');
       scheduleSave();
     });
+  });
+  favoriteButton?.addEventListener('click', async () => {
+    await saveJournal();
+    const result = await window.journalStore.toggleFavorite(entryDate);
+    if (!result.updated) {
+      if (saveStatus) saveStatus.textContent = '写下内容后才能收藏';
+      return;
+    }
+    updateFavoriteButton(favoriteButton, result.isFavorite);
   });
 };
 
@@ -661,6 +701,7 @@ const bindCalendarPreviewPage = (entryDate) => {
   const weather = document.querySelector('[data-calendar-preview-weather]');
   const location = document.querySelector('[data-calendar-preview-location]');
   const mood = document.querySelector('[data-calendar-preview-mood]');
+  const favoriteButton = document.querySelector('[data-preview-favorite]');
   if (!content || !status || !element || !metadata || !weather || !location || !mood) return;
 
   window.journalStore.load(entryDate).then((entry) => {
@@ -677,6 +718,7 @@ const bindCalendarPreviewPage = (entryDate) => {
     const selectedMood = moods.find((option) => option.emoji === moodValue) ?? moods[0];
     mood.textContent = `${selectedMood.emoji} ${selectedMood.label}`;
     metadata.hidden = false;
+    updateFavoriteButton(favoriteButton, entry.isFavorite);
     element.hidden = false;
     calendarPreviewEditor = new Editor({
       element,
@@ -691,6 +733,11 @@ const bindCalendarPreviewPage = (entryDate) => {
     console.error('Failed to load calendar journal', error);
     if (!document.contains(content)) return;
     status.textContent = '读取日记失败';
+  });
+
+  favoriteButton?.addEventListener('click', async () => {
+    const result = await window.journalStore.toggleFavorite(entryDate);
+    if (result.updated) updateFavoriteButton(favoriteButton, result.isFavorite);
   });
 };
 
@@ -778,6 +825,52 @@ const bindTimelinePage = () => {
   loadMore();
 };
 
+const bindFavoritesPage = () => {
+  const scroll = document.querySelector('[data-favorites-scroll]');
+  const list = document.querySelector('[data-favorites-list]');
+  const count = document.querySelector('[data-favorites-count]');
+  if (!scroll || !list || !count) return;
+
+  window.journalStore.listFavorites().then((entries) => {
+    if (document.querySelector('[data-favorites-list]') !== list) return;
+    count.textContent = entries.length ? `已收藏 ${entries.length} 篇日记` : '还没有收藏的日记';
+    if (!entries.length) {
+      list.innerHTML = '<div class="favorites-empty"><span><i class="bi bi-bookmark-heart"></i></span><strong>还没有收藏的日记</strong><p>遇到想反复回看的内容，就收藏起来吧。</p></div>';
+      return;
+    }
+
+    entries.forEach((entry) => {
+      const entryDate = new Date(`${entry.entryDate}T00:00:00`);
+      const selectedMood = moods.find((option) => option.emoji === entry.metadata?.mood) ?? moods[0];
+      const details = [entry.metadata?.weatherText, entry.metadata?.locationText].filter(Boolean);
+      const summary = entry.plainText?.trim() || '这一天记录了图片或视频。';
+      const item = document.createElement('article');
+      item.className = 'favorite-item';
+      item.innerHTML = `
+        <div class="favorite-item__date"><strong>${entryDate.getDate()}</strong><span>${entryDate.getFullYear()}年${entryDate.getMonth() + 1}月</span></div>
+        <button class="favorite-card" type="button">
+          <div class="favorite-card__top"><span class="favorite-card__mood">${selectedMood.emoji} ${selectedMood.label}</span>${details.map((detail) => `<span>${escapeHtml(detail)}</span>`).join('')}</div>
+          <p>${escapeHtml(summary)}</p>
+          <span class="favorite-card__more">查看日记 <i class="bi bi-arrow-up-right"></i></span>
+        </button>`;
+      item.querySelector('.favorite-card')?.addEventListener('click', () => {
+        workspaceContent.innerHTML = calendarPreviewPage(entry.entryDate, '返回收藏');
+        bindCalendarPreviewPage(entry.entryDate);
+        document.querySelector('[data-calendar-back]')?.addEventListener('click', () => {
+          calendarPreviewEditor?.destroy();
+          calendarPreviewEditor = null;
+          workspaceContent.innerHTML = favoritesPage();
+          bindFavoritesPage();
+        });
+      });
+      list.append(item);
+    });
+  }).catch((error) => {
+    console.error('Failed to load favorites', error);
+    count.textContent = '收藏读取失败';
+  });
+};
+
 const setActiveMenu = (menuKey) => {
   const menu = menus.find((item) => item.key === menuKey);
   if (!menu || !workspaceContent) return;
@@ -791,10 +884,13 @@ const setActiveMenu = (menuKey) => {
       ? calendarPage(calendarVisibleMonth)
       : menuKey === 'timeline'
         ? timelinePage()
-      : `<div class="page-view"><h1 class="page-view__title">${menu.label}</h1></div>`;
+        : menuKey === 'favorites'
+          ? favoritesPage()
+        : `<div class="page-view"><h1 class="page-view__title">${menu.label}</h1></div>`;
   if (menuKey === 'today') bindTodayPage();
   if (menuKey === 'calendar') bindCalendarPage();
   if (menuKey === 'timeline') bindTimelinePage();
+  if (menuKey === 'favorites') bindFavoritesPage();
   menuButtons.forEach((button) => {
     const active = button.dataset.menuKey === menuKey;
     button.classList.toggle('sidebar__item--active', active);

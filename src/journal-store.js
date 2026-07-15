@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite';
 
 const entryDatePattern = /^\d{4}-\d{2}-\d{2}$/;
 const maximumMediaBytes = { image: 25 * 1024 * 1024, video: 100 * 1024 * 1024 };
-const schemaVersion = '2';
+const schemaVersion = '3';
 
 const validateEntryDate = (entryDate) => {
   if (!entryDatePattern.test(entryDate)) throw new Error('Invalid journal date');
@@ -54,6 +54,8 @@ export const createJournalStore = ({ dataDirectory }) => {
     content_json TEXT NOT NULL,
     plain_text TEXT NOT NULL DEFAULT '',
     metadata_json TEXT NOT NULL DEFAULT '{}',
+    is_favorite INTEGER NOT NULL DEFAULT 0,
+    favorited_at TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
   )`);
@@ -61,19 +63,28 @@ export const createJournalStore = ({ dataDirectory }) => {
     key TEXT PRIMARY KEY NOT NULL,
     value TEXT NOT NULL
   )`);
-  const hasMetadataColumn = database.prepare("SELECT 1 AS present FROM pragma_table_info('journal_entries') WHERE name = 'metadata_json'").get();
-  if (!hasMetadataColumn) {
+  const hasColumn = (name) => database.prepare("SELECT 1 AS present FROM pragma_table_info('journal_entries') WHERE name = ?").get(name);
+  if (!hasColumn('metadata_json')) {
     database.exec("ALTER TABLE journal_entries ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}'");
+  }
+  if (!hasColumn('is_favorite')) {
+    database.exec('ALTER TABLE journal_entries ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0');
+  }
+  if (!hasColumn('favorited_at')) {
+    database.exec('ALTER TABLE journal_entries ADD COLUMN favorited_at TEXT');
   }
   database.prepare("INSERT INTO journal_metadata (key, value) VALUES ('schema_version', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(schemaVersion);
 
   const selectEntry = database.prepare('SELECT * FROM journal_entries WHERE entry_date = ?');
   const selectEntriesInRange = database.prepare('SELECT entry_date, metadata_json FROM journal_entries WHERE entry_date >= ? AND entry_date < ? ORDER BY entry_date');
   const selectTimelineEntries = database.prepare('SELECT entry_date, plain_text, metadata_json FROM journal_entries WHERE entry_date < ? ORDER BY entry_date DESC LIMIT ?');
+  const selectFavoriteEntries = database.prepare('SELECT entry_date, plain_text, metadata_json, favorited_at FROM journal_entries WHERE is_favorite = 1 ORDER BY favorited_at DESC, entry_date DESC');
   const upsertEntry = database.prepare(`INSERT INTO journal_entries (entry_date, content_json, plain_text, metadata_json, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(entry_date) DO UPDATE SET content_json = excluded.content_json, plain_text = excluded.plain_text, metadata_json = excluded.metadata_json, updated_at = excluded.updated_at`);
   const deleteEntry = database.prepare('DELETE FROM journal_entries WHERE entry_date = ?');
+  const selectFavoriteState = database.prepare('SELECT is_favorite FROM journal_entries WHERE entry_date = ?');
+  const updateFavoriteState = database.prepare('UPDATE journal_entries SET is_favorite = ?, favorited_at = ? WHERE entry_date = ?');
 
   const entryMediaDirectory = (entryDate) => path.join(mediaDirectory, entryDate);
   const removeEntryMedia = (entryDate) => fs.rmSync(entryMediaDirectory(entryDate), { recursive: true, force: true });
@@ -96,6 +107,7 @@ export const createJournalStore = ({ dataDirectory }) => {
         content: JSON.parse(entry.content_json),
         plainText: entry.plain_text,
         metadata: JSON.parse(entry.metadata_json || '{}'),
+        isFavorite: Boolean(entry.is_favorite),
         createdAt: entry.created_at,
         updatedAt: entry.updated_at,
       } : null;
@@ -126,6 +138,22 @@ export const createJournalStore = ({ dataDirectory }) => {
         entries,
         nextCursor: hasMore ? entries.at(-1).entryDate : null,
       };
+    },
+    listFavorites() {
+      return selectFavoriteEntries.all().map((entry) => ({
+        entryDate: entry.entry_date,
+        plainText: entry.plain_text,
+        metadata: JSON.parse(entry.metadata_json || '{}'),
+        favoritedAt: entry.favorited_at,
+      }));
+    },
+    toggleFavorite(entryDate) {
+      validateEntryDate(entryDate);
+      const entry = selectFavoriteState.get(entryDate);
+      if (!entry) return { updated: false, isFavorite: false };
+      const isFavorite = !Boolean(entry.is_favorite);
+      updateFavoriteState.run(isFavorite ? 1 : 0, isFavorite ? new Date().toISOString() : null, entryDate);
+      return { updated: true, isFavorite };
     },
     save({ entryDate, content, plainText = '', metadata = {} }) {
       validateEntryDate(entryDate);
