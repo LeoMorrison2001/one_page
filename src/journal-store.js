@@ -69,6 +69,7 @@ export const createJournalStore = ({ dataDirectory }) => {
 
   const selectEntry = database.prepare('SELECT * FROM journal_entries WHERE entry_date = ?');
   const selectEntriesInRange = database.prepare('SELECT entry_date, metadata_json FROM journal_entries WHERE entry_date >= ? AND entry_date < ? ORDER BY entry_date');
+  const selectTimelineEntries = database.prepare('SELECT entry_date, plain_text, metadata_json FROM journal_entries WHERE entry_date < ? ORDER BY entry_date DESC LIMIT ?');
   const upsertEntry = database.prepare(`INSERT INTO journal_entries (entry_date, content_json, plain_text, metadata_json, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(entry_date) DO UPDATE SET content_json = excluded.content_json, plain_text = excluded.plain_text, metadata_json = excluded.metadata_json, updated_at = excluded.updated_at`);
@@ -110,6 +111,21 @@ export const createJournalStore = ({ dataDirectory }) => {
         entryDate: entry.entry_date,
         metadata: JSON.parse(entry.metadata_json || '{}'),
       }));
+    },
+    listTimeline({ before = null, limit = 30 } = {}) {
+      if (before !== null) validateEntryDate(before);
+      const pageSize = Number.isInteger(limit) ? Math.min(Math.max(limit, 1), 30) : 30;
+      const rows = selectTimelineEntries.all(before ?? '9999-12-31', pageSize + 1);
+      const hasMore = rows.length > pageSize;
+      const entries = rows.slice(0, pageSize).map((entry) => ({
+        entryDate: entry.entry_date,
+        plainText: entry.plain_text,
+        metadata: JSON.parse(entry.metadata_json || '{}'),
+      }));
+      return {
+        entries,
+        nextCursor: hasMore ? entries.at(-1).entryDate : null,
+      };
     },
     save({ entryDate, content, plainText = '', metadata = {} }) {
       validateEntryDate(entryDate);

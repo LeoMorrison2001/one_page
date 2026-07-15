@@ -105,6 +105,7 @@ app.whenReady().then(() => {
 
 ipcMain.handle('journal:load', (_event, entryDate) => journalStore?.load(entryDate) ?? null);
 ipcMain.handle('journal:list-month', (_event, year, month) => journalStore?.listMonth(year, month) ?? []);
+ipcMain.handle('journal:list-timeline', (_event, options) => journalStore?.listTimeline(options) ?? { entries: [], nextCursor: null });
 ipcMain.handle('journal:save', (_event, entry) => journalStore?.save(entry) ?? { saved: false });
 ipcMain.handle('journal:remove', (_event, entryDate) => journalStore?.remove(entryDate));
 ipcMain.handle('journal:import-media', (_event, media) => journalStore?.importMedia(media));

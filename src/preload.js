@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld('journalStore', {
   status: () => ipcRenderer.invoke('journal:status'),
   load: (entryDate) => ipcRenderer.invoke('journal:load', entryDate),
   listMonth: (year, month) => ipcRenderer.invoke('journal:list-month', year, month),
+  listTimeline: (options) => ipcRenderer.invoke('journal:list-timeline', options),
   save: (entry) => ipcRenderer.invoke('journal:save', entry),
   remove: (entryDate) => ipcRenderer.invoke('journal:remove', entryDate),
   importMedia: ({ entryDate, file }) => ipcRenderer.invoke('journal:import-media', {

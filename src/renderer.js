@@ -108,13 +108,13 @@ const calendarPage = (visibleMonth = new Date()) => {
   `;
 };
 
-const calendarPreviewPage = (entryDate) => {
+const calendarPreviewPage = (entryDate, backLabel = '返回日历') => {
   const selectedDate = new Date(`${entryDate}T00:00:00`);
   return `
     <section class="calendar-preview">
       <header class="calendar-preview__header">
         <h1 class="calendar-preview__title">${formatToday(selectedDate).replace(/ \d{2}:\d{2}:\d{2}$/, '')}</h1>
-        <button class="calendar-preview__back" type="button" data-calendar-back><i class="bi bi-arrow-left"></i> 返回日历</button>
+        <button class="calendar-preview__back" type="button" data-calendar-back><i class="bi bi-arrow-left"></i> ${backLabel}</button>
       </header>
       <div class="calendar-preview__meta" data-calendar-preview-meta hidden>
         <span><i class="bi bi-cloud-sun"></i><span data-calendar-preview-weather></span></span>
@@ -128,6 +128,21 @@ const calendarPreviewPage = (entryDate) => {
     </section>
   `;
 };
+
+const timelinePage = () => `
+  <section class="timeline-page">
+    <header class="timeline-page__header">
+      <div>
+        <h1 class="timeline-page__title">时间线</h1>
+        <p class="timeline-page__subtitle">回看那些被认真记录的日子</p>
+      </div>
+    </header>
+    <div class="timeline-scroll" data-timeline-scroll>
+      <div data-timeline-list></div>
+      <p class="timeline-loading" data-timeline-loading>正在加载日记…</p>
+    </div>
+  </section>
+`;
 
 const todayPage = () => {
   const openedAt = new Date();
@@ -679,6 +694,90 @@ const bindCalendarPreviewPage = (entryDate) => {
   });
 };
 
+const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, (character) => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;',
+}[character]));
+
+const bindTimelinePage = () => {
+  const scroll = document.querySelector('[data-timeline-scroll]');
+  const list = document.querySelector('[data-timeline-list]');
+  const loadingElement = document.querySelector('[data-timeline-loading]');
+  if (!scroll || !list || !loadingElement) return;
+
+  let cursor = null;
+  let isLoading = false;
+  let isComplete = false;
+  let hasLoadedEntries = false;
+  const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+
+  const appendEntry = (entry) => {
+    const entryDate = new Date(`${entry.entryDate}T00:00:00`);
+    const monthKey = entry.entryDate.slice(0, 7);
+    let group = list.querySelector(`[data-timeline-month="${monthKey}"]`);
+    if (!group) {
+      group = document.createElement('section');
+      group.className = 'timeline-group';
+      group.dataset.timelineMonth = monthKey;
+      group.setAttribute('aria-label', `${entryDate.getFullYear()}年${entryDate.getMonth() + 1}月`);
+      group.innerHTML = `<h2 class="timeline-group__title">${entryDate.getFullYear()}年${entryDate.getMonth() + 1}月</h2><div class="timeline-list"></div>`;
+      list.append(group);
+    }
+
+    const selectedMood = moods.find((option) => option.emoji === entry.metadata?.mood) ?? moods[0];
+    const details = [entry.metadata?.weatherText, entry.metadata?.locationText].filter(Boolean);
+    const summary = entry.plainText?.trim() || '这一天记录了图片或视频。';
+    const item = document.createElement('article');
+    item.className = 'timeline-entry';
+    item.innerHTML = `
+      <div class="timeline-entry__date"><strong>${entryDate.getDate()}</strong><span>${weekdays[entryDate.getDay()]}</span></div>
+      <span class="timeline-entry__line" aria-hidden="true"></span>
+      <button class="timeline-card" type="button">
+        <div class="timeline-card__top"><span class="timeline-card__mood">${selectedMood.emoji} ${selectedMood.label}</span>${details.map((detail) => `<span>${escapeHtml(detail)}</span>`).join('')}</div>
+        <p>${escapeHtml(summary)}</p>
+        <span class="timeline-card__more">查看日记 <i class="bi bi-arrow-up-right"></i></span>
+      </button>`;
+    item.querySelector('.timeline-card')?.addEventListener('click', () => {
+      workspaceContent.innerHTML = calendarPreviewPage(entry.entryDate, '返回时间线');
+      bindCalendarPreviewPage(entry.entryDate);
+      document.querySelector('[data-calendar-back]')?.addEventListener('click', () => {
+        calendarPreviewEditor?.destroy();
+        calendarPreviewEditor = null;
+        workspaceContent.innerHTML = timelinePage();
+        bindTimelinePage();
+      });
+    });
+    group.querySelector('.timeline-list')?.append(item);
+  };
+
+  const loadMore = async () => {
+    if (isLoading || isComplete) return;
+    isLoading = true;
+    loadingElement.textContent = hasLoadedEntries ? '正在加载更多日记…' : '正在加载日记…';
+    try {
+      const page = await window.journalStore.listTimeline({ before: cursor, limit: 30 });
+      if (document.querySelector('[data-timeline-scroll]') !== scroll) return;
+      page.entries.forEach(appendEntry);
+      hasLoadedEntries ||= page.entries.length > 0;
+      cursor = page.nextCursor;
+      isComplete = !cursor;
+      loadingElement.textContent = isComplete
+        ? hasLoadedEntries ? '已经到底了' : '还没有可展示的日记'
+        : '继续向下滚动，加载更多';
+    } catch (error) {
+      console.error('Failed to load timeline', error);
+      loadingElement.textContent = '时间线读取失败';
+      isComplete = true;
+    } finally {
+      isLoading = false;
+    }
+  };
+
+  scroll.addEventListener('scroll', () => {
+    if (scroll.scrollTop + scroll.clientHeight >= scroll.scrollHeight - 160) loadMore();
+  });
+  loadMore();
+};
+
 const setActiveMenu = (menuKey) => {
   const menu = menus.find((item) => item.key === menuKey);
   if (!menu || !workspaceContent) return;
@@ -690,9 +789,12 @@ const setActiveMenu = (menuKey) => {
     ? todayPage()
     : menuKey === 'calendar'
       ? calendarPage(calendarVisibleMonth)
+      : menuKey === 'timeline'
+        ? timelinePage()
       : `<div class="page-view"><h1 class="page-view__title">${menu.label}</h1></div>`;
   if (menuKey === 'today') bindTodayPage();
   if (menuKey === 'calendar') bindCalendarPage();
+  if (menuKey === 'timeline') bindTimelinePage();
   menuButtons.forEach((button) => {
     const active = button.dataset.menuKey === menuKey;
     button.classList.toggle('sidebar__item--active', active);

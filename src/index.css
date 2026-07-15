@@ -186,6 +186,192 @@ button {
   letter-spacing: var(--page-title-tracking);
 }
 
+.timeline-page {
+  width: min(100%, 1100px);
+  height: 100%;
+  min-height: 0;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.timeline-page__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 28px;
+}
+
+.timeline-page__title {
+  margin: 0;
+  color: #202020;
+  font-size: var(--page-title-size);
+  font-weight: 650;
+  letter-spacing: var(--page-title-tracking);
+}
+
+.timeline-page__subtitle {
+  margin: 10px 0 0;
+  color: #999;
+  font-size: 13px;
+}
+
+.timeline-filter {
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid #e5e5e5;
+  border-radius: 9px;
+  background: #fff;
+  color: #666;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.timeline-filter i {
+  margin-right: 5px;
+}
+
+.timeline-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 10px 30px 0;
+}
+
+.timeline-loading {
+  margin: 24px 0 8px 88px;
+  color: #a2a2a2;
+  font-size: 12px;
+  text-align: center;
+}
+
+.timeline-group + .timeline-group {
+  margin-top: 36px;
+}
+
+.timeline-group__title {
+  margin: 0 0 18px;
+  color: #777;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.timeline-list {
+  position: relative;
+}
+
+.timeline-list::before {
+  position: absolute;
+  top: 20px;
+  bottom: 28px;
+  left: 72px;
+  width: 1px;
+  background: #e8e8e8;
+  content: '';
+}
+
+.timeline-entry {
+  position: relative;
+  display: grid;
+  grid-template-columns: 48px 32px minmax(0, 1fr);
+  align-items: flex-start;
+  column-gap: 8px;
+}
+
+.timeline-entry + .timeline-entry {
+  margin-top: 16px;
+}
+
+.timeline-entry__date {
+  padding-top: 11px;
+  color: #8a8a8a;
+  text-align: center;
+}
+
+.timeline-entry__date strong {
+  display: block;
+  color: #333;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.timeline-entry__date span {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+}
+
+.timeline-entry__line {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 14px;
+  height: 14px;
+  margin-top: 19px;
+  justify-self: center;
+  place-items: center;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #a8bbaa;
+}
+
+.timeline-card {
+  width: 100%;
+  min-height: 112px;
+  padding: 16px 18px;
+  border: 1px solid #e9e9e9;
+  border-radius: 13px;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.timeline-card:hover {
+  border-color: #d9d9d9;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.045);
+  transform: translateY(-1px);
+}
+
+.timeline-card__top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 13px;
+  color: #9a9a9a;
+  font-size: 12px;
+}
+
+.timeline-card__mood {
+  color: #586f5f;
+  font-weight: 600;
+}
+
+.timeline-card p {
+  display: -webkit-box;
+  margin: 12px 0 11px;
+  overflow: hidden;
+  color: #575757;
+  font-size: 14px;
+  line-height: 1.7;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.timeline-card__more {
+  color: #8eaa95;
+  font-size: 12px;
+}
+
+.timeline-card__more i {
+  margin-left: 3px;
+}
+
+.timeline-group--muted {
+  opacity: 0.8;
+}
+
 .calendar-page,
 .calendar-preview {
   width: min(100%, 1400px);
@@ -928,6 +1114,24 @@ button {
   .calendar-page__header {
     flex-direction: column;
     gap: 14px;
+  }
+
+  .timeline-page__header {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .timeline-entry {
+    grid-template-columns: 44px 30px minmax(0, 1fr);
+    column-gap: 6px;
+  }
+
+  .timeline-list::before {
+    left: 65px;
+  }
+
+  .timeline-loading {
+    margin-left: 80px;
   }
 
   .calendar-day {
