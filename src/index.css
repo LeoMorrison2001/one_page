@@ -237,6 +237,16 @@
   color: #8db99a;
 }
 
+:root[data-theme='dark'] .calendar-preview__meta > span {
+  border-color: #405447;
+  background: #29362e;
+  color: #b8d9c0;
+}
+
+:root[data-theme='dark'] .calendar-preview__meta i {
+  color: #8db99a;
+}
+
 html,
 body {
   margin: 0;
