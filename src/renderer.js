@@ -26,7 +26,6 @@ const menus = [
   { key: 'calendar', label: '日历', icon: 'bi bi-calendar3' },
   { key: 'timeline', label: '时间线', icon: 'bi bi-clock-history' },
   { key: 'favorites', label: '收藏', icon: 'bi bi-bookmark-heart' },
-  { key: 'tags', label: '标签', icon: 'bi bi-tags' },
   { key: 'review', label: '回顾', icon: 'bi bi-arrow-repeat' },
   { key: 'settings', label: '设置', icon: 'bi bi-gear' },
 ];
@@ -161,6 +160,24 @@ const favoritesPage = () => `
   </section>
 `;
 
+const reviewPage = () => `
+  <section class="review-page">
+    <header class="review-page__header">
+      <div>
+        <h1 class="review-page__title">回顾</h1>
+        <p class="review-page__subtitle">从过去的记录里，重新遇见当时的自己</p>
+      </div>
+    </header>
+    <div class="review-summary">
+      <div><strong data-review-total>—</strong><span>累计日记</span></div>
+      <div><strong data-review-month>—</strong><span>本月记录</span></div>
+    </div>
+    <div class="review-sections" data-review-sections>
+      <p class="review-loading">正在整理你的回忆…</p>
+    </div>
+  </section>
+`;
+
 const todayPage = () => {
   const openedAt = new Date();
   return `
@@ -199,7 +216,7 @@ const todayPage = () => {
 const app = document.querySelector('#app');
 app.innerHTML = `
   <div class="window-shell">
-    <header class="titlebar"><div class="titlebar__drag-region"></div><div class="titlebar__actions">
+    <header class="titlebar"><div class="titlebar__brand">一页</div><div class="titlebar__drag-region"></div><div class="titlebar__actions">
       <button class="window-button" type="button" data-action="minimize" aria-label="最小化窗口"><i class="bi bi-dash-lg"></i></button>
       <button class="window-button" type="button" data-action="toggle-maximize" aria-label="最大化窗口"><i class="bi bi-square"></i></button>
       <button class="window-button window-button--close" type="button" data-action="close" aria-label="关闭窗口"><i class="bi bi-x-lg"></i></button>
@@ -871,6 +888,68 @@ const bindFavoritesPage = () => {
   });
 };
 
+const bindReviewPage = () => {
+  const total = document.querySelector('[data-review-total]');
+  const monthCount = document.querySelector('[data-review-month]');
+  const sections = document.querySelector('[data-review-sections]');
+  if (!total || !monthCount || !sections) return;
+
+  const openReviewEntry = (entryDate) => {
+    workspaceContent.innerHTML = calendarPreviewPage(entryDate, '返回回顾');
+    bindCalendarPreviewPage(entryDate);
+    document.querySelector('[data-calendar-back]')?.addEventListener('click', () => {
+      calendarPreviewEditor?.destroy();
+      calendarPreviewEditor = null;
+      workspaceContent.innerHTML = reviewPage();
+      bindReviewPage();
+    });
+  };
+
+  const reviewCard = (title, description, entry, emptyMessage) => {
+    const section = document.createElement('section');
+    section.className = 'review-section';
+    const heading = document.createElement('div');
+    heading.className = 'review-section__heading';
+    heading.innerHTML = `<h2>${title}</h2><p>${description}</p>`;
+    section.append(heading);
+    if (!entry) {
+      const empty = document.createElement('div');
+      empty.className = 'review-card review-card--empty';
+      empty.textContent = emptyMessage;
+      section.append(empty);
+      return section;
+    }
+    const selectedMood = moods.find((option) => option.emoji === entry.metadata?.mood) ?? moods[0];
+    const entryDate = new Date(`${entry.entryDate}T00:00:00`);
+    const detail = [entry.metadata?.weatherText, entry.metadata?.locationText].filter(Boolean).join(' · ');
+    const card = document.createElement('button');
+    card.className = 'review-card';
+    card.type = 'button';
+    card.innerHTML = `
+      <div class="review-card__date">${entryDate.getFullYear()}年${entryDate.getMonth() + 1}月${entryDate.getDate()}日</div>
+      <div class="review-card__meta"><span>${selectedMood.emoji} ${selectedMood.label}</span>${detail ? `<span>${escapeHtml(detail)}</span>` : ''}</div>
+      <p>${escapeHtml(entry.plainText?.trim() || '这一天记录了图片或视频。')}</p>
+      <span class="review-card__more">打开日记 <i class="bi bi-arrow-up-right"></i></span>`;
+    card.addEventListener('click', () => openReviewEntry(entry.entryDate));
+    section.append(card);
+    return section;
+  };
+
+  window.journalStore.getReview(formatEntryDate(new Date())).then((review) => {
+    if (document.querySelector('[data-review-sections]') !== sections) return;
+    total.textContent = review.total;
+    monthCount.textContent = review.monthCount;
+    sections.innerHTML = '';
+    sections.append(
+      reviewCard('去年今天', '看看一年前的今天，你在记录什么。', review.previousYear, '去年今天还没有留下日记。'),
+      reviewCard('随机回忆', '从过去的日子里随机挑出一篇。', review.randomEntry, '写下第一篇日记后，这里会出现一段随机回忆。'),
+    );
+  }).catch((error) => {
+    console.error('Failed to load review', error);
+    sections.innerHTML = '<p class="review-loading">回顾读取失败</p>';
+  });
+};
+
 const setActiveMenu = (menuKey) => {
   const menu = menus.find((item) => item.key === menuKey);
   if (!menu || !workspaceContent) return;
@@ -886,11 +965,14 @@ const setActiveMenu = (menuKey) => {
         ? timelinePage()
         : menuKey === 'favorites'
           ? favoritesPage()
-        : `<div class="page-view"><h1 class="page-view__title">${menu.label}</h1></div>`;
+          : menuKey === 'review'
+            ? reviewPage()
+          : `<div class="page-view"><h1 class="page-view__title">${menu.label}</h1></div>`;
   if (menuKey === 'today') bindTodayPage();
   if (menuKey === 'calendar') bindCalendarPage();
   if (menuKey === 'timeline') bindTimelinePage();
   if (menuKey === 'favorites') bindFavoritesPage();
+  if (menuKey === 'review') bindReviewPage();
   menuButtons.forEach((button) => {
     const active = button.dataset.menuKey === menuKey;
     button.classList.toggle('sidebar__item--active', active);

@@ -79,6 +79,10 @@ export const createJournalStore = ({ dataDirectory }) => {
   const selectEntriesInRange = database.prepare('SELECT entry_date, metadata_json FROM journal_entries WHERE entry_date >= ? AND entry_date < ? ORDER BY entry_date');
   const selectTimelineEntries = database.prepare('SELECT entry_date, plain_text, metadata_json FROM journal_entries WHERE entry_date < ? ORDER BY entry_date DESC LIMIT ?');
   const selectFavoriteEntries = database.prepare('SELECT entry_date, plain_text, metadata_json, favorited_at FROM journal_entries WHERE is_favorite = 1 ORDER BY favorited_at DESC, entry_date DESC');
+  const selectEntrySummary = database.prepare('SELECT entry_date, plain_text, metadata_json FROM journal_entries WHERE entry_date = ?');
+  const selectEntryCount = database.prepare('SELECT COUNT(*) AS count FROM journal_entries');
+  const selectEntryCountInRange = database.prepare('SELECT COUNT(*) AS count FROM journal_entries WHERE entry_date >= ? AND entry_date < ?');
+  const selectEntryAtOffset = database.prepare('SELECT entry_date, plain_text, metadata_json FROM journal_entries ORDER BY entry_date ASC LIMIT 1 OFFSET ?');
   const upsertEntry = database.prepare(`INSERT INTO journal_entries (entry_date, content_json, plain_text, metadata_json, created_at, updated_at)
     VALUES (?, ?, ?, ?, ?, ?)
     ON CONFLICT(entry_date) DO UPDATE SET content_json = excluded.content_json, plain_text = excluded.plain_text, metadata_json = excluded.metadata_json, updated_at = excluded.updated_at`);
@@ -97,6 +101,11 @@ export const createJournalStore = ({ dataDirectory }) => {
     }
     if (fs.readdirSync(directory).length === 0) fs.rmdirSync(directory);
   };
+  const toEntrySummary = (entry) => entry ? {
+    entryDate: entry.entry_date,
+    plainText: entry.plain_text,
+    metadata: JSON.parse(entry.metadata_json || '{}'),
+  } : null;
 
   return {
     load(entryDate) {
@@ -140,12 +149,23 @@ export const createJournalStore = ({ dataDirectory }) => {
       };
     },
     listFavorites() {
-      return selectFavoriteEntries.all().map((entry) => ({
-        entryDate: entry.entry_date,
-        plainText: entry.plain_text,
-        metadata: JSON.parse(entry.metadata_json || '{}'),
-        favoritedAt: entry.favorited_at,
-      }));
+      return selectFavoriteEntries.all().map((entry) => ({ ...toEntrySummary(entry), favoritedAt: entry.favorited_at }));
+    },
+    getReview(today) {
+      validateEntryDate(today);
+      const [year, month, day] = today.split('-').map(Number);
+      const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+      const nextMonth = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
+      const monthEnd = `${nextMonth.year}-${String(nextMonth.month).padStart(2, '0')}-01`;
+      const total = selectEntryCount.get().count;
+      const previousYearDate = `${year - 1}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      const randomEntry = total ? selectEntryAtOffset.get(Math.floor(Math.random() * total)) : null;
+      return {
+        total,
+        monthCount: selectEntryCountInRange.get(monthStart, monthEnd).count,
+        previousYear: toEntrySummary(selectEntrySummary.get(previousYearDate)),
+        randomEntry: toEntrySummary(randomEntry),
+      };
     },
     toggleFavorite(entryDate) {
       validateEntryDate(entryDate);

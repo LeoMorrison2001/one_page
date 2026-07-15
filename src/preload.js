@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('journalStore', {
   listTimeline: (options) => ipcRenderer.invoke('journal:list-timeline', options),
   listFavorites: () => ipcRenderer.invoke('journal:list-favorites'),
   toggleFavorite: (entryDate) => ipcRenderer.invoke('journal:toggle-favorite', entryDate),
+  getReview: (today) => ipcRenderer.invoke('journal:get-review', today),
   save: (entry) => ipcRenderer.invoke('journal:save', entry),
   remove: (entryDate) => ipcRenderer.invoke('journal:remove', entryDate),
   importMedia: ({ entryDate, file }) => ipcRenderer.invoke('journal:import-media', {

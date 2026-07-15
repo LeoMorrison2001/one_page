@@ -30,8 +30,8 @@ const createWindow = () => {
   mainWindow = new BrowserWindow({
     width: 1100,
     height: 720,
-    minWidth: 720,
-    minHeight: 480,
+    minWidth: 1000,
+    minHeight: 680,
     frame: false,
     titleBarStyle: 'hidden',
     backgroundColor: '#181818',
@@ -108,6 +108,7 @@ ipcMain.handle('journal:list-month', (_event, year, month) => journalStore?.list
 ipcMain.handle('journal:list-timeline', (_event, options) => journalStore?.listTimeline(options) ?? { entries: [], nextCursor: null });
 ipcMain.handle('journal:list-favorites', () => journalStore?.listFavorites() ?? []);
 ipcMain.handle('journal:toggle-favorite', (_event, entryDate) => journalStore?.toggleFavorite(entryDate) ?? { updated: false, isFavorite: false });
+ipcMain.handle('journal:get-review', (_event, today) => journalStore?.getReview(today) ?? { total: 0, monthCount: 0, previousYear: null, randomEntry: null });
 ipcMain.handle('journal:save', (_event, entry) => journalStore?.save(entry) ?? { saved: false });
 ipcMain.handle('journal:remove', (_event, entryDate) => journalStore?.remove(entryDate));
 ipcMain.handle('journal:import-media', (_event, media) => journalStore?.importMedia(media));
