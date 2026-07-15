@@ -200,6 +200,10 @@ const settingsPage = () => `
       <section class="settings-group">
         <h2>数据与隐私</h2>
         <div class="settings-row">
+          <div><strong>应用密码</strong><span>打开一页时需要输入密码才能进入</span></div>
+          <button class="settings-button" type="button" data-settings-action="change-password">修改密码</button>
+        </div>
+        <div class="settings-row">
           <div><strong>数据保存位置</strong><span data-settings-data-path>正在读取…</span></div>
           <button class="settings-button" type="button" data-settings-action="change-path">更改位置</button>
         </div>
@@ -252,6 +256,26 @@ const settingsPage = () => `
           <button class="settings-button settings-button--danger" type="button" data-reset-confirm disabled>确认格式化</button>
         </div>
       </div>
+    </div>
+    <div class="settings-modal" data-password-modal hidden role="dialog" aria-modal="true" aria-labelledby="password-modal-title">
+      <form class="settings-modal__panel" data-password-form>
+        <h2 id="password-modal-title">修改应用密码</h2>
+        <p>请先验证当前密码，再设置新密码。</p>
+        <label>当前密码
+          <input type="password" data-current-password autocomplete="current-password" required>
+        </label>
+        <label>新密码
+          <input type="password" data-new-password autocomplete="new-password" minlength="6" maxlength="256" required>
+        </label>
+        <label>确认新密码
+          <input type="password" data-confirm-password autocomplete="new-password" minlength="6" maxlength="256" required>
+        </label>
+        <p class="settings-password-error" data-password-error aria-live="polite"></p>
+        <div class="settings-modal__actions">
+          <button class="settings-button" type="button" data-password-cancel>取消</button>
+          <button class="settings-button" type="submit" data-password-submit>确认修改</button>
+        </div>
+      </form>
     </div>
   </section>
 `;
@@ -319,6 +343,60 @@ const applyTheme = (theme) => {
     ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
     : theme;
   document.documentElement.dataset.theme = resolvedTheme;
+};
+
+const showSecurityGate = ({ passwordSet, onUnlocked }) => {
+  const gate = document.createElement('div');
+  gate.className = 'security-gate';
+  gate.innerHTML = `
+    <form class="security-gate__panel" data-security-form>
+      <img class="security-gate__logo" src="${appIconUrl}" alt="" />
+      <h1>${passwordSet ? '请输入密码进入一页' : '设置应用密码'}</h1>
+      ${passwordSet ? '' : '<p>首次使用，请设置一个密码来保护日记界面。</p>'}
+      <label>${passwordSet ? '密码' : '新密码（至少 6 个字符）'}
+        <input type="password" data-security-password autocomplete="${passwordSet ? 'current-password' : 'new-password'}" minlength="6" maxlength="256" required autofocus>
+      </label>
+      ${passwordSet ? '' : `<label>确认密码
+        <input type="password" data-security-confirm-password autocomplete="new-password" minlength="6" maxlength="256" required>
+      </label>`}
+      <p class="security-gate__error" data-security-error aria-live="polite"></p>
+      <button class="security-gate__submit" type="submit" data-security-submit>${passwordSet ? '解锁' : '设置并进入'}</button>
+    </form>
+  `;
+  app.append(gate);
+  const form = gate.querySelector('[data-security-form]');
+  const passwordInput = gate.querySelector('[data-security-password]');
+  const confirmInput = gate.querySelector('[data-security-confirm-password]');
+  const errorElement = gate.querySelector('[data-security-error]');
+  const submit = gate.querySelector('[data-security-submit]');
+  passwordInput?.focus();
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (!passwordInput || !errorElement || !submit) return;
+    if (confirmInput && passwordInput.value !== confirmInput.value) {
+      errorElement.textContent = '两次输入的密码不一致';
+      confirmInput.focus();
+      return;
+    }
+    try {
+      submit.disabled = true;
+      errorElement.textContent = '';
+      const result = passwordSet
+        ? await window.appSecurity.verifyPassword(passwordInput.value)
+        : await window.appSecurity.setPassword(passwordInput.value);
+      if (passwordSet && !result.verified) {
+        errorElement.textContent = '密码不正确，请重试';
+        passwordInput.select();
+        return;
+      }
+      gate.remove();
+      onUnlocked();
+    } catch (error) {
+      errorElement.textContent = error.message || '操作失败，请重试';
+    } finally {
+      submit.disabled = false;
+    }
+  });
 };
 
 const showCalendarNotice = (message) => {
@@ -1046,7 +1124,14 @@ const bindSettingsPage = () => {
   const resetModal = document.querySelector('[data-reset-modal]');
   const resetInput = document.querySelector('[data-reset-confirmation]');
   const resetConfirm = document.querySelector('[data-reset-confirm]');
-  if (!pathElement || !versionElement || !feedback || !confirmModal || !confirmTitle || !confirmMessage || !confirmProceed || !resetModal || !resetInput || !resetConfirm) return;
+  const passwordModal = document.querySelector('[data-password-modal]');
+  const passwordForm = document.querySelector('[data-password-form]');
+  const currentPasswordInput = document.querySelector('[data-current-password]');
+  const newPasswordInput = document.querySelector('[data-new-password]');
+  const confirmPasswordInput = document.querySelector('[data-confirm-password]');
+  const passwordError = document.querySelector('[data-password-error]');
+  const passwordSubmit = document.querySelector('[data-password-submit]');
+  if (!pathElement || !versionElement || !feedback || !confirmModal || !confirmTitle || !confirmMessage || !confirmProceed || !resetModal || !resetInput || !resetConfirm || !passwordModal || !passwordForm || !currentPasswordInput || !newPasswordInput || !confirmPasswordInput || !passwordError || !passwordSubmit) return;
 
   let confirmResolver = null;
   let confirmOpener = null;
@@ -1151,6 +1236,12 @@ const bindSettingsPage = () => {
     resetModal.hidden = false;
     resetInput.focus();
   });
+  document.querySelector('[data-settings-action="change-password"]')?.addEventListener('click', () => {
+    passwordForm.reset();
+    passwordError.textContent = '';
+    passwordModal.hidden = false;
+    currentPasswordInput.focus();
+  });
   document.querySelector('[data-settings-action="check-update"]')?.addEventListener('click', async () => {
     try {
       const result = await window.appUpdates.check();
@@ -1171,12 +1262,16 @@ const bindSettingsPage = () => {
   document.querySelector('[data-reset-cancel]')?.addEventListener('click', () => {
     resetModal.hidden = true;
   });
+  document.querySelector('[data-password-cancel]')?.addEventListener('click', () => {
+    passwordModal.hidden = true;
+  });
   document.querySelector('[data-confirm-cancel]')?.addEventListener('click', () => closeConfirmModal(false));
   confirmProceed.addEventListener('click', () => closeConfirmModal(true));
   document.addEventListener('keydown', (event) => {
     if (event.key !== 'Escape') return;
     if (!confirmModal.hidden) closeConfirmModal(false);
     else if (!resetModal.hidden) resetModal.hidden = true;
+    else if (!passwordModal.hidden) passwordModal.hidden = true;
   });
   resetInput.addEventListener('input', () => {
     resetConfirm.disabled = resetInput.value !== '确认格式化';
@@ -1192,6 +1287,24 @@ const bindSettingsPage = () => {
       console.error('Failed to reset journal data', error);
       setFeedback('格式化数据失败', true);
       resetConfirm.disabled = false;
+    }
+  });
+  passwordForm.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    if (newPasswordInput.value !== confirmPasswordInput.value) {
+      passwordError.textContent = '两次输入的新密码不一致';
+      confirmPasswordInput.focus();
+      return;
+    }
+    try {
+      passwordSubmit.disabled = true;
+      await window.appSecurity.changePassword(currentPasswordInput.value, newPasswordInput.value);
+      passwordModal.hidden = true;
+      setFeedback('应用密码已修改');
+    } catch (error) {
+      passwordError.textContent = error.message || '密码修改失败';
+    } finally {
+      passwordSubmit.disabled = false;
     }
   });
   syncSettings().catch((error) => setFeedback('设置读取失败', true));
@@ -1234,7 +1347,22 @@ document.querySelector('[data-action="minimize"]')?.addEventListener('click', ()
 maximizeButton?.addEventListener('click', () => window.windowControls.toggleMaximize());
 document.querySelector('[data-action="close"]')?.addEventListener('click', () => window.windowControls.close());
 menuButtons.forEach((button) => button.addEventListener('click', () => setActiveMenu(button.dataset.menuKey)));
-bindTodayPage();
 window.windowControls.isMaximized().then(updateMaximizeButton);
 window.windowControls.onMaximizedChanged(updateMaximizeButton);
-window.appSettings.get().then((settings) => applyTheme(settings.theme));
+let applicationStarted = false;
+const startApplication = () => {
+  if (applicationStarted) return;
+  applicationStarted = true;
+  bindTodayPage();
+};
+
+Promise.all([window.appSettings.get(), window.appSecurity.status()]).then(([settings, security]) => {
+  applyTheme(settings.theme);
+  showSecurityGate({ passwordSet: security.passwordSet, onUnlocked: startApplication });
+}).catch((error) => {
+  console.error('Failed to initialize application security', error);
+  const failure = document.createElement('div');
+  failure.className = 'security-gate';
+  failure.innerHTML = '<div class="security-gate__panel"><h1>无法加载密码保护</h1><p>为保护日记内容，应用暂时不会打开。请重启应用后重试。</p></div>';
+  app.append(failure);
+});

@@ -42,6 +42,13 @@ contextBridge.exposeInMainWorld('appSettings', {
   resetData: () => ipcRenderer.invoke('settings:reset-data'),
 });
 
+contextBridge.exposeInMainWorld('appSecurity', {
+  status: () => ipcRenderer.invoke('security:status'),
+  setPassword: (password) => ipcRenderer.invoke('security:set-password', password),
+  verifyPassword: (password) => ipcRenderer.invoke('security:verify-password', password),
+  changePassword: (currentPassword, newPassword) => ipcRenderer.invoke('security:change-password', currentPassword, newPassword),
+});
+
 contextBridge.exposeInMainWorld('appUpdates', {
   check: () => ipcRenderer.invoke('updates:check'),
 });

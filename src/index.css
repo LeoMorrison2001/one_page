@@ -149,6 +149,30 @@
   color: #858585;
 }
 
+:root[data-theme='dark'] .security-gate {
+  background: #181818;
+}
+
+:root[data-theme='dark'] .security-gate__panel {
+  border-color: #414141;
+  background: #2b2b2b;
+}
+
+:root[data-theme='dark'] .security-gate__panel h1 {
+  color: #f1f1f1;
+}
+
+:root[data-theme='dark'] .security-gate__panel p,
+:root[data-theme='dark'] .security-gate__panel label {
+  color: #ababab;
+}
+
+:root[data-theme='dark'] .security-gate__panel input {
+  border-color: #4b4b4b;
+  background: #202020;
+  color: #ededed;
+}
+
 :root[data-theme='dark'] .theme-options__button--active {
   border-color: #5f7d69 !important;
   background: #314239 !important;
@@ -659,6 +683,107 @@ button {
 .settings-button:disabled {
   cursor: not-allowed;
   opacity: 0.48;
+}
+
+.settings-password-error {
+  min-height: 18px;
+  margin: 12px 0 0 !important;
+  color: #a26868 !important;
+}
+
+.security-gate {
+  position: fixed;
+  z-index: 100;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: #f5f5f7;
+}
+
+.security-gate__panel {
+  width: min(100%, 380px);
+  padding: 32px;
+  border: 1px solid #e4e4e4;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
+}
+
+.security-gate__logo {
+  display: block;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 18px;
+  border-radius: 13px;
+}
+
+.security-gate__panel h1 {
+  margin: 0;
+  color: #2d2d2d;
+  text-align: center;
+  font-size: 22px;
+}
+
+.security-gate__panel p {
+  margin: 10px 0 24px;
+  color: #777;
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.security-gate__panel label {
+  display: block;
+  margin-top: 14px;
+  color: #666;
+  font-size: 13px;
+}
+
+.security-gate__panel input {
+  width: 100%;
+  height: 40px;
+  margin-top: 8px;
+  padding: 0 11px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  outline: none;
+  background: #fff;
+  color: #333;
+  font: inherit;
+}
+
+.security-gate__panel input:focus {
+  border-color: #789482;
+  box-shadow: 0 0 0 3px rgba(120, 148, 130, 0.16);
+}
+
+.security-gate__error {
+  min-height: 20px;
+  margin: 12px 0 0 !important;
+  color: #a26868 !important;
+}
+
+.security-gate__submit {
+  width: 100%;
+  height: 40px;
+  margin-top: 8px;
+  border: 0;
+  border-radius: 8px;
+  background: #587562;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.security-gate__submit:hover {
+  background: #496452;
+}
+
+.security-gate__submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
 }
 
 .review-page__header {

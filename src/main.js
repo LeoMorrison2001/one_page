@@ -2,6 +2,7 @@ import { app, autoUpdater, BrowserWindow, dialog, ipcMain, net, protocol, sessio
 import AdmZip from 'adm-zip';
 import fs from 'node:fs';
 import path from 'node:path';
+import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 import started from 'electron-squirrel-startup';
 import { updateElectronApp } from 'update-electron-app';
@@ -187,7 +188,7 @@ let journalStore;
 let journalStoreError = '';
 let journalDataDirectory = '';
 let settingsPath = '';
-let appSettings = { theme: 'light', dataDirectory: null };
+let appSettings = { theme: 'light', dataDirectory: null, security: null };
 
 const journalDataParts = ['journal', 'journal-media'];
 
@@ -201,6 +202,36 @@ const readAppSettings = () => {
 
 const saveAppSettings = () => {
   fs.writeFileSync(settingsPath, JSON.stringify(appSettings, null, 2), { encoding: 'utf8', mode: 0o600 });
+};
+
+const passwordHash = (password, salt) => scryptSync(password, salt, 64).toString('hex');
+
+const validatePassword = (password) => {
+  if (typeof password !== 'string' || password.length < 6 || password.length > 256) {
+    throw new Error('密码长度应为 6 到 256 个字符');
+  }
+};
+
+const passwordIsCorrect = (password) => {
+  const security = appSettings.security;
+  if (!security?.salt || !security?.passwordHash || typeof password !== 'string') return false;
+  try {
+    const stored = Buffer.from(security.passwordHash, 'hex');
+    const candidate = Buffer.from(passwordHash(password, security.salt), 'hex');
+    return stored.length === candidate.length && timingSafeEqual(stored, candidate);
+  } catch {
+    return false;
+  }
+};
+
+const savePassword = (password) => {
+  validatePassword(password);
+  const salt = randomBytes(16).toString('hex');
+  appSettings = {
+    ...appSettings,
+    security: { salt, passwordHash: passwordHash(password, salt) },
+  };
+  saveAppSettings();
 };
 
 const normalizedDirectory = (directory) => path.resolve(directory);
@@ -417,6 +448,18 @@ ipcMain.handle('settings:choose-data-directory', async () => {
 ipcMain.handle('settings:export-data', exportJournalData);
 ipcMain.handle('settings:import-data', importJournalData);
 ipcMain.handle('settings:reset-data', resetJournalData);
+ipcMain.handle('security:status', () => ({ passwordSet: Boolean(appSettings.security?.salt && appSettings.security?.passwordHash) }));
+ipcMain.handle('security:set-password', (_event, password) => {
+  if (appSettings.security?.passwordHash) throw new Error('密码已设置，请使用修改密码功能');
+  savePassword(password);
+  return { passwordSet: true };
+});
+ipcMain.handle('security:verify-password', (_event, password) => ({ verified: passwordIsCorrect(password) }));
+ipcMain.handle('security:change-password', (_event, currentPassword, newPassword) => {
+  if (!passwordIsCorrect(currentPassword)) throw new Error('当前密码不正确');
+  savePassword(newPassword);
+  return { passwordSet: true };
+});
 ipcMain.handle('updates:check', async () => {
   if (!app.isPackaged) return { status: 'development' };
   if (!isSquirrelInstall()) return checkPortableUpdate({ showDialog: true });
