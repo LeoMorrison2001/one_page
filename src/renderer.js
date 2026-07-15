@@ -222,6 +222,10 @@ const settingsPage = () => `
           <div><strong>一页</strong><span>用日记记录生活和想法</span></div>
           <span class="settings-version" data-settings-version>—</span>
         </div>
+        <div class="settings-row">
+          <div><strong>应用更新</strong><span>安装版会自动下载更新；绿色版会打开新版下载页面</span></div>
+          <button class="settings-button" type="button" data-settings-action="check-update">检查更新</button>
+        </div>
         <p class="settings-note">这是一本属于你的日记。记录每天的心情、生活片段和那些值得留下的想法。</p>
       </section>
     </div>
@@ -1146,6 +1150,23 @@ const bindSettingsPage = () => {
     resetConfirm.disabled = true;
     resetModal.hidden = false;
     resetInput.focus();
+  });
+  document.querySelector('[data-settings-action="check-update"]')?.addEventListener('click', async () => {
+    try {
+      const result = await window.appUpdates.check();
+      const messages = {
+        automatic: '已启用自动更新，发现新版本后会自动下载',
+        scheduled: '首次更新检查会在启动约 10 秒后开始',
+        available: `发现新版本 ${result.latestVersion}，已打开下载页面`,
+        'up-to-date': '当前已是最新版本',
+        development: '开发环境不会检查更新',
+        error: '检查更新失败，请稍后重试',
+      };
+      setFeedback(messages[result.status] || '正在检查更新', result.status === 'error');
+    } catch (error) {
+      console.error('Failed to check update', error);
+      setFeedback('检查更新失败，请稍后重试', true);
+    }
   });
   document.querySelector('[data-reset-cancel]')?.addEventListener('click', () => {
     resetModal.hidden = true;

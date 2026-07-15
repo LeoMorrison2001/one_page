@@ -1,9 +1,10 @@
-import { app, BrowserWindow, dialog, ipcMain, net, protocol, session } from 'electron';
+import { app, autoUpdater, BrowserWindow, dialog, ipcMain, net, protocol, session, shell } from 'electron';
 import AdmZip from 'adm-zip';
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import started from 'electron-squirrel-startup';
+import { updateElectronApp } from 'update-electron-app';
 import { createJournalStore } from './journal-store.js';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -69,6 +70,82 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 let mainWindow = null;
+let installedUpdaterReady = false;
+const githubRepository = 'LeoMorrison2001/one_page';
+
+// Squirrel installs the app inside an app-<version> folder next to Update.exe.
+// The ZIP build does not include that updater, so it must never try to replace
+// its own running executable.
+const isSquirrelInstall = () => process.platform === 'win32'
+  && app.isPackaged
+  && fs.existsSync(path.join(path.dirname(process.execPath), '..', 'Update.exe'));
+
+const compareVersions = (left, right) => {
+  const parts = (value) => String(value).replace(/^v/, '').split('-')[0].split('.').map((part) => Number(part) || 0);
+  const leftParts = parts(left);
+  const rightParts = parts(right);
+  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
+    if ((leftParts[index] || 0) !== (rightParts[index] || 0)) return (leftParts[index] || 0) - (rightParts[index] || 0);
+  }
+  return 0;
+};
+
+const checkPortableUpdate = async ({ showDialog = false } = {}) => {
+  if (!app.isPackaged) return { status: 'development' };
+  try {
+    const response = await net.fetch(`https://api.github.com/repos/${githubRepository}/releases/latest`, {
+      headers: { Accept: 'application/vnd.github+json' },
+    });
+    if (!response.ok) throw new Error(`GitHub returned ${response.status}`);
+    const release = await response.json();
+    const latestVersion = release.tag_name;
+    const available = compareVersions(latestVersion, app.getVersion()) > 0;
+    if (showDialog && available) {
+      const result = await dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        buttons: ['前往下载', '稍后'],
+        defaultId: 0,
+        cancelId: 1,
+        title: '发现新版本',
+        message: `一页 ${latestVersion} 已发布`,
+        detail: '绿色版不能在运行时替换自身。下载新版 ZIP 后，解压并覆盖当前程序文件即可；日记数据不会受影响。',
+      });
+      if (result.response === 0) await shell.openExternal(release.html_url);
+    }
+    return { status: available ? 'available' : 'up-to-date', latestVersion };
+  } catch (error) {
+    console.error('Unable to check portable update:', error);
+    return { status: 'error' };
+  }
+};
+
+const configureUpdates = () => {
+  if (!app.isPackaged || process.platform !== 'win32') return;
+  if (!isSquirrelInstall()) {
+    setTimeout(() => checkPortableUpdate({ showDialog: true }), 10_000);
+    return;
+  }
+  if (process.argv.includes('--squirrel-firstrun')) return;
+  setTimeout(() => {
+    updateElectronApp({
+      repo: githubRepository,
+      updateInterval: '6 hours',
+      onNotifyUser: async ({ releaseName }) => {
+        const result = await dialog.showMessageBox(mainWindow, {
+          type: 'info',
+          buttons: ['立即重启更新', '稍后'],
+          defaultId: 0,
+          cancelId: 1,
+          title: '更新已准备好',
+          message: `一页 ${releaseName || '新版本'} 已下载`,
+          detail: '重启应用即可完成更新。你的日记数据不会受到影响。',
+        });
+        if (result.response === 0) autoUpdater.quitAndInstall();
+      },
+    });
+    installedUpdaterReady = true;
+  }, 10_000);
+};
 const appIconPath = app.isPackaged
   ? path.join(process.resourcesPath, 'assets', 'app-icon.png')
   : path.join(__dirname, '../../assets/app-icon.png');
@@ -297,6 +374,7 @@ app.whenReady().then(() => {
   }
 
   createWindow();
+  configureUpdates();
 
   // On OS X it's common to re-create a window in the app when the
   // dock icon is clicked and there are no other windows open.
@@ -339,6 +417,11 @@ ipcMain.handle('settings:choose-data-directory', async () => {
 ipcMain.handle('settings:export-data', exportJournalData);
 ipcMain.handle('settings:import-data', importJournalData);
 ipcMain.handle('settings:reset-data', resetJournalData);
+ipcMain.handle('updates:check', async () => {
+  if (!app.isPackaged) return { status: 'development' };
+  if (!isSquirrelInstall()) return checkPortableUpdate({ showDialog: true });
+  return { status: installedUpdaterReady ? 'automatic' : 'scheduled' };
+});
 
 ipcMain.on('window:minimize', (event) => {
   const window = BrowserWindow.fromWebContents(event.sender);

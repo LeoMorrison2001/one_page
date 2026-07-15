@@ -31,6 +31,14 @@ module.exports = {
       config: {},
     },
   ],
+  publishers: [
+    {
+      name: '@electron-forge/publisher-github',
+      config: {
+        repository: { owner: 'LeoMorrison2001', name: 'one_page' },
+      },
+    },
+  ],
   plugins: [
     {
       name: '@electron-forge/plugin-vite',

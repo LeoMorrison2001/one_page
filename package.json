@@ -1,10 +1,11 @@
 {
   "name": "one-page",
   "productName": "一页",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "一页：记录每天的生活与心情。",
   "main": ".vite/build/main.js",
   "private": true,
+  "repository": "https://github.com/LeoMorrison2001/one_page.git",
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",
@@ -13,7 +14,12 @@
     "publish": "electron-forge publish",
     "lint": "echo \"No linting configured\""
   },
-  "keywords": ["journal", "diary", "一页", "日记"],
+  "keywords": [
+    "journal",
+    "diary",
+    "一页",
+    "日记"
+  ],
   "author": {
     "name": "renyh",
     "email": "renyh@tcrj.com.cn"
@@ -28,6 +34,7 @@
     "@electron-forge/plugin-auto-unpack-natives": "^7.11.2",
     "@electron-forge/plugin-fuses": "^7.11.2",
     "@electron-forge/plugin-vite": "^7.11.2",
+    "@electron-forge/publisher-github": "^7.11.2",
     "@electron/fuses": "^1.8.0",
     "electron": "43.1.0",
     "vite": "^5.4.21"
@@ -40,6 +47,7 @@
     "@tiptap/starter-kit": "^3.27.4",
     "adm-zip": "^0.5.16",
     "bootstrap-icons": "^1.13.1",
-    "electron-squirrel-startup": "^1.0.1"
+    "electron-squirrel-startup": "^1.0.1",
+    "update-electron-app": "^3.3.0"
   }
 }

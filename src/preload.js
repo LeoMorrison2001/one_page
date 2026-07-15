@@ -41,3 +41,7 @@ contextBridge.exposeInMainWorld('appSettings', {
   importData: () => ipcRenderer.invoke('settings:import-data'),
   resetData: () => ipcRenderer.invoke('settings:reset-data'),
 });
+
+contextBridge.exposeInMainWorld('appUpdates', {
+  check: () => ipcRenderer.invoke('updates:check'),
+});
