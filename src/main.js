@@ -15,6 +15,45 @@ if (process.platform === 'win32') {
   app.setAppUserModelId('com.renyh.onepage');
 }
 
+const appDataDirectory = app.getPath('appData');
+const legacyUserDataDirectory = path.join(appDataDirectory, '一页');
+const stableUserDataDirectory = path.join(appDataDirectory, 'one-page');
+const legacyDatabasePath = path.join(legacyUserDataDirectory, 'journal', 'journal.db');
+const stableDatabasePath = path.join(stableUserDataDirectory, 'journal', 'journal.db');
+
+// The visible application name is Chinese, but an ASCII data path is easier to
+// back up and support. Preserve existing journals by copying them once before
+// selecting the new location; the legacy directory is deliberately retained.
+const migrateLegacyUserData = () => {
+  const legacySettingsPath = path.join(legacyUserDataDirectory, 'settings.json');
+  const stableSettingsPath = path.join(stableUserDataDirectory, 'settings.json');
+  const hasLegacyData = fs.existsSync(legacyDatabasePath) || fs.existsSync(legacySettingsPath);
+  if (!hasLegacyData || fs.existsSync(stableDatabasePath)) return;
+
+  fs.mkdirSync(stableUserDataDirectory, { recursive: true });
+  for (const part of ['journal', 'journal-media']) {
+    const source = path.join(legacyUserDataDirectory, part);
+    const destination = path.join(stableUserDataDirectory, part);
+    if (fs.existsSync(source) && !fs.existsSync(destination)) fs.cpSync(source, destination, { recursive: true });
+  }
+  if (fs.existsSync(legacySettingsPath) && !fs.existsSync(stableSettingsPath)) {
+    fs.copyFileSync(legacySettingsPath, stableSettingsPath);
+    const settings = JSON.parse(fs.readFileSync(stableSettingsPath, 'utf8'));
+    if (settings.dataDirectory && path.resolve(settings.dataDirectory) === path.resolve(legacyUserDataDirectory)) {
+      settings.dataDirectory = stableUserDataDirectory;
+      fs.writeFileSync(stableSettingsPath, JSON.stringify(settings, null, 2), { encoding: 'utf8', mode: 0o600 });
+    }
+  }
+};
+
+try {
+  migrateLegacyUserData();
+  app.setPath('userData', stableUserDataDirectory);
+} catch (error) {
+  console.error('Unable to migrate legacy user data; continuing with the legacy location:', error);
+  app.setPath('userData', legacyUserDataDirectory);
+}
+
 // Media is served through a private protocol. Marking it as a stream before
 // app readiness lets Chromium use byte-range loading for video controls.
 protocol.registerSchemesAsPrivileged([

@@ -7,6 +7,7 @@ module.exports = {
     executableName: '一页',
     icon: './assets/app-icon.ico',
     extraResource: ['./assets/app-icon.png'],
+    electronZipDir: process.env.ELECTRON_ZIP_DIR || undefined,
   },
   rebuildConfig: {},
   makers: [
@@ -19,7 +20,7 @@ module.exports = {
     },
     {
       name: '@electron-forge/maker-zip',
-      platforms: ['darwin'],
+      platforms: ['win32'],
     },
     {
       name: '@electron-forge/maker-deb',
