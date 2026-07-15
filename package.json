@@ -1,7 +1,7 @@
 {
   "name": "one-page",
   "productName": "一页",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "一页：记录每天的生活与心情。",
   "main": ".vite/build/main.js",
   "private": true,

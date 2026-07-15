@@ -230,8 +230,23 @@ const createWindow = () => {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // Keep developer tools available while developing, but do not expose
+      // them in distributed builds.
+      devTools: !app.isPackaged,
     },
   });
+
+  // Prevent Chromium's developer-tool shortcuts from reaching packaged
+  // builds. `devTools: false` is the actual capability gate; this also avoids
+  // the shortcut appearing to work for users of the installed app.
+  if (app.isPackaged) {
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      const isDevToolsShortcut = input.type === 'keyDown'
+        && (input.key === 'F12'
+          || ((input.control || input.meta) && input.shift && ['I', 'J', 'C'].includes(input.key.toUpperCase())));
+      if (isDevToolsShortcut) event.preventDefault();
+    });
+  }
 
   // and load the index.html of the app.
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {

@@ -139,6 +139,47 @@
   background: #2b2b2b;
 }
 
+:root[data-theme='dark'] .update-modal {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+:root[data-theme='dark'] .update-modal__panel {
+  border-color: #454545;
+  background: #2b2b2b;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.42);
+}
+
+:root[data-theme='dark'] .update-modal__panel h2 {
+  color: #ededed;
+}
+
+:root[data-theme='dark'] .update-modal__panel p {
+  color: #ababab;
+}
+
+:root[data-theme='dark'] .update-progress {
+  background: #36433a;
+}
+
+:root[data-theme='dark'] .update-progress > div {
+  background: #7ca987;
+}
+
+:root[data-theme='dark'] .update-modal__panel .update-progress__label {
+  color: #9bc4a4;
+}
+
+:root[data-theme='dark'] .update-modal__primary {
+  border-color: #5f7d69;
+  background: #42604b;
+  color: #edf7ef;
+}
+
+:root[data-theme='dark'] .update-modal__primary:hover {
+  border-color: #729b7d;
+  background: #4e7258;
+}
+
 :root[data-theme='dark'] .settings-modal__panel input {
   border-color: #4b4b4b;
   background: #202020;
