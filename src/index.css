@@ -266,12 +266,20 @@ button {
   display: flex;
   width: 220px;
   align-items: center;
-  padding: 0 22px;
+  gap: 8px;
+  padding: 0 14px;
   -webkit-app-region: drag;
   color: #202020;
   font-size: 15px;
   font-weight: 650;
   letter-spacing: 0.03em;
+}
+
+.titlebar__logo {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 auto;
+  object-fit: contain;
 }
 
 .titlebar__actions {
@@ -287,7 +295,7 @@ button {
   height: 34px;
   border: 0;
   background: transparent;
-  color: #000000;
+  color: #263238;
   cursor: pointer;
   display: grid;
   place-items: center;
@@ -311,7 +319,7 @@ button {
 }
 
 .window-button i {
-  font-size: 10px;
+  font-size: 14px;
   line-height: 1;
 }
 

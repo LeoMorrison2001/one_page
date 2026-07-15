@@ -2,7 +2,9 @@ import { Editor, Node, mergeAttributes } from '@tiptap/core';
 import Image from '@tiptap/extension-image';
 import Placeholder from '@tiptap/extension-placeholder';
 import StarterKit from '@tiptap/starter-kit';
+import 'bootstrap-icons/font/bootstrap-icons.css';
 import './index.css';
+import appIconUrl from '../assets/app-icon.png';
 
 const Video = Node.create({
   name: 'video',
@@ -288,7 +290,7 @@ const todayPage = () => {
 const app = document.querySelector('#app');
 app.innerHTML = `
   <div class="window-shell">
-    <header class="titlebar"><div class="titlebar__brand">一页</div><div class="titlebar__drag-region"></div><div class="titlebar__actions">
+    <header class="titlebar"><div class="titlebar__brand"><img class="titlebar__logo" src="${appIconUrl}" alt="" /><span>一页</span></div><div class="titlebar__drag-region"></div><div class="titlebar__actions">
       <button class="window-button" type="button" data-action="minimize" aria-label="最小化窗口"><i class="bi bi-dash-lg"></i></button>
       <button class="window-button" type="button" data-action="toggle-maximize" aria-label="最大化窗口"><i class="bi bi-square"></i></button>
       <button class="window-button window-button--close" type="button" data-action="close" aria-label="关闭窗口"><i class="bi bi-x-lg"></i></button>

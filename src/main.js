@@ -11,6 +11,10 @@ if (started) {
   app.quit();
 }
 
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.renyh.onepage');
+}
+
 // Media is served through a private protocol. Marking it as a stream before
 // app readiness lets Chromium use byte-range loading for video controls.
 protocol.registerSchemesAsPrivileged([
@@ -26,6 +30,9 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 let mainWindow = null;
+const appIconPath = app.isPackaged
+  ? path.join(process.resourcesPath, 'assets', 'app-icon.png')
+  : path.join(__dirname, '../../assets/app-icon.png');
 
 const createWindow = () => {
   // Create the browser window.
@@ -37,6 +44,7 @@ const createWindow = () => {
     frame: false,
     titleBarStyle: 'hidden',
     backgroundColor: '#181818',
+    icon: appIconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

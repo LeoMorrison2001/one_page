@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="一页">
+  <rect width="256" height="256" rx="56" fill="#2f5d72"/>
+  <rect x="64" y="42" width="128" height="172" rx="16" fill="#fffdf8"/>
+  <path d="M158 42v34c0 9 7 16 16 16h18" fill="#dce8e7"/>
+  <path d="M158 42l34 34h-18c-9 0-16-7-16-16z" fill="#b8d4d0"/>
+  <rect x="88" y="112" width="80" height="10" rx="5" fill="#2f5d72"/>
+  <rect x="88" y="138" width="64" height="10" rx="5" fill="#6a8d99"/>
+  <rect x="88" y="164" width="48" height="10" rx="5" fill="#e48562"/>
+</svg>

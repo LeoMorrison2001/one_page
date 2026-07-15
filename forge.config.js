@@ -4,12 +4,18 @@ const { FuseV1Options, FuseVersion } = require('@electron/fuses');
 module.exports = {
   packagerConfig: {
     asar: true,
+    executableName: '一页',
+    icon: './assets/app-icon.ico',
+    extraResource: ['./assets/app-icon.png'],
   },
   rebuildConfig: {},
   makers: [
     {
       name: '@electron-forge/maker-squirrel',
-      config: {},
+      config: {
+        setupIcon: './assets/app-icon.ico',
+        setupExe: '一页-1.0.0-安装程序.exe',
+      },
     },
     {
       name: '@electron-forge/maker-zip',

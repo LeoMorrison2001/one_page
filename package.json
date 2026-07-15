@@ -1,18 +1,19 @@
 {
-  "name": "one_page",
-  "productName": "one_page",
+  "name": "one-page",
+  "productName": "一页",
   "version": "1.0.0",
-  "description": "My Electron application description",
+  "description": "一页：记录每天的生活与心情。",
   "main": ".vite/build/main.js",
   "private": true,
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
+    "build:icon": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/create-windows-icon.ps1",
     "publish": "electron-forge publish",
     "lint": "echo \"No linting configured\""
   },
-  "keywords": [],
+  "keywords": ["journal", "diary", "一页", "日记"],
   "author": {
     "name": "renyh",
     "email": "renyh@tcrj.com.cn"
@@ -38,6 +39,7 @@
     "@tiptap/pm": "^3.27.4",
     "@tiptap/starter-kit": "^3.27.4",
     "adm-zip": "^0.5.16",
+    "bootstrap-icons": "^1.13.1",
     "electron-squirrel-startup": "^1.0.1"
   }
 }
