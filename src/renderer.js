@@ -223,14 +223,13 @@ const settingsPage = () => `
       <section class="settings-group">
         <h2>关于</h2>
         <div class="settings-row">
-          <div><strong>一页</strong><span>用日记记录生活和想法</span></div>
+          <div><strong>一页</strong><span>用日记记录生活和想法</span><p class="settings-note settings-note--about">这是一本属于你的日记。记录每天的心情、生活片段和那些值得留下的想法。</p></div>
           <span class="settings-version" data-settings-version>—</span>
         </div>
         <div class="settings-row">
-          <div><strong>应用更新</strong><span>安装版会自动下载更新；绿色版会打开新版下载页面</span></div>
+          <div><strong>应用更新</strong></div>
           <button class="settings-button" type="button" data-settings-action="check-update">检查更新</button>
         </div>
-        <p class="settings-note">这是一本属于你的日记。记录每天的心情、生活片段和那些值得留下的想法。</p>
       </section>
     </div>
     <p class="settings-feedback" data-settings-feedback aria-live="polite"></p>
@@ -783,17 +782,31 @@ const bindTodayPage = () => {
   }));
   weatherButton?.addEventListener('click', refreshJournalContext);
   locationButton?.addEventListener('click', refreshJournalContext);
+  const closeMoodPicker = () => {
+    if (!moodPicker) return;
+    moodPicker.hidden = true;
+    moodButton?.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('click', dismissMoodPickerOnClick);
+  };
+  const dismissMoodPickerOnClick = (event) => {
+    if (moodPicker?.contains(event.target) || moodButton?.contains(event.target)) return;
+    closeMoodPicker();
+  };
   moodButton?.addEventListener('click', () => {
     if (!moodPicker) return;
     const willOpen = moodPicker.hidden;
-    moodPicker.hidden = !willOpen;
-    moodButton.setAttribute('aria-expanded', String(willOpen));
+    if (!willOpen) {
+      closeMoodPicker();
+      return;
+    }
+    moodPicker.hidden = false;
+    moodButton.setAttribute('aria-expanded', 'true');
+    document.addEventListener('click', dismissMoodPickerOnClick);
   });
   moodPicker?.querySelectorAll('[data-mood]').forEach((button) => {
     button.addEventListener('click', () => {
       setMood(button.dataset.mood);
-      moodPicker.hidden = true;
-      moodButton?.setAttribute('aria-expanded', 'false');
+      closeMoodPicker();
       scheduleSave();
     });
   });
@@ -1246,9 +1259,8 @@ const bindSettingsPage = () => {
     try {
       const result = await window.appUpdates.check();
       const messages = {
-        automatic: '已启用自动更新，发现新版本后会自动下载',
-        scheduled: '首次更新检查会在启动约 10 秒后开始',
-        available: `发现新版本 ${result.latestVersion}，已打开下载页面`,
+        checking: '正在检查更新…',
+        available: `发现新版本 ${result.version}，请选择是否下载`,
         'up-to-date': '当前已是最新版本',
         development: '开发环境不会检查更新',
         error: '检查更新失败，请稍后重试',
@@ -1355,6 +1367,89 @@ const startApplication = () => {
   applicationStarted = true;
   bindTodayPage();
 };
+
+const updateModal = document.createElement('div');
+updateModal.className = 'update-modal';
+updateModal.hidden = true;
+updateModal.innerHTML = `
+  <div class="update-modal__panel" role="dialog" aria-modal="true" aria-labelledby="update-modal-title">
+    <h2 id="update-modal-title" data-update-title>发现新版本</h2>
+    <p data-update-message>一页有新版本可用。</p>
+    <div class="update-progress" data-update-progress hidden><div data-update-progress-bar></div></div>
+    <p class="update-progress__label" data-update-progress-label hidden></p>
+    <div class="update-modal__actions">
+      <button class="settings-button" type="button" data-update-later>稍后</button>
+      <button class="settings-button update-modal__primary" type="button" data-update-download>下载更新</button>
+      <button class="settings-button update-modal__primary" type="button" data-update-install hidden>重启并安装</button>
+    </div>
+  </div>
+`;
+document.body.append(updateModal);
+
+const updateTitle = updateModal.querySelector('[data-update-title]');
+const updateMessage = updateModal.querySelector('[data-update-message]');
+const updateProgress = updateModal.querySelector('[data-update-progress]');
+const updateProgressBar = updateModal.querySelector('[data-update-progress-bar]');
+const updateProgressLabel = updateModal.querySelector('[data-update-progress-label]');
+const updateLaterButton = updateModal.querySelector('[data-update-later]');
+const updateDownloadButton = updateModal.querySelector('[data-update-download]');
+const updateInstallButton = updateModal.querySelector('[data-update-install]');
+
+const renderUpdateState = (state) => {
+  if (state.status === 'available') {
+    updateTitle.textContent = '发现新版本';
+    updateMessage.textContent = `一页 ${state.version} 已发布。现在下载更新吗？`;
+    updateProgress.hidden = true;
+    updateProgressLabel.hidden = true;
+    updateLaterButton.hidden = false;
+    updateDownloadButton.hidden = false;
+    updateInstallButton.hidden = true;
+    updateModal.hidden = false;
+    return;
+  }
+  if (state.status === 'downloading') {
+    const percentage = state.total ? Math.min(100, Math.round((state.downloaded / state.total) * 100)) : 0;
+    updateTitle.textContent = '正在下载更新';
+    updateMessage.textContent = '下载完成后即可重启安装，你可以继续使用应用。';
+    updateProgress.hidden = false;
+    updateProgressBar.style.width = `${percentage}%`;
+    updateProgressLabel.hidden = false;
+    updateProgressLabel.textContent = state.total ? `已下载 ${percentage}%` : '正在连接下载服务器…';
+    updateLaterButton.hidden = true;
+    updateDownloadButton.hidden = true;
+    updateInstallButton.hidden = true;
+    updateModal.hidden = false;
+    return;
+  }
+  if (state.status === 'ready') {
+    updateTitle.textContent = '更新已下载';
+    updateMessage.textContent = '重启应用即可完成安装。';
+    updateProgress.hidden = false;
+    updateProgressBar.style.width = '100%';
+    updateProgressLabel.hidden = false;
+    updateProgressLabel.textContent = '下载完成';
+    updateLaterButton.hidden = false;
+    updateDownloadButton.hidden = true;
+    updateInstallButton.hidden = false;
+    updateModal.hidden = false;
+    return;
+  }
+  if (state.status === 'error') {
+    updateTitle.textContent = '更新失败';
+    updateMessage.textContent = '检查或下载更新时出现问题，请稍后重试。';
+    updateProgress.hidden = true;
+    updateProgressLabel.hidden = true;
+    updateLaterButton.hidden = false;
+    updateDownloadButton.hidden = true;
+    updateInstallButton.hidden = true;
+    updateModal.hidden = false;
+  }
+};
+
+updateLaterButton.addEventListener('click', () => { updateModal.hidden = true; });
+updateDownloadButton.addEventListener('click', () => window.appUpdates.download().catch((error) => console.error('Failed to download update', error)));
+updateInstallButton.addEventListener('click', () => window.appUpdates.install().catch((error) => console.error('Failed to install update', error)));
+window.appUpdates.onState(renderUpdateState);
 
 Promise.all([window.appSettings.get(), window.appSecurity.status()]).then(([settings, security]) => {
   applyTheme(settings.theme);
