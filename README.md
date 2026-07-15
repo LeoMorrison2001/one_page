@@ -58,8 +58,9 @@ npm run make
 ## 发布新版本
 
 1. 将 `package.json` 中的 `version` 递增，例如 `1.0.0` 改为 `1.0.1`。
-2. 提交版本变更后，推送同名标签，例如 `git tag v1.0.1` 和 `git push origin v1.0.1`。
-3. GitHub Actions 会自动构建并上传 GitHub Release；安装版会从该 Release 自动更新。
+2. 更新 [发布说明模板](.github/release-notes.md) 中「本次更新」的内容。
+3. 提交版本变更后，推送同名标签，例如 `git tag v1.0.1` 和 `git push origin v1.0.1`。
+4. GitHub Actions 会自动构建并上传 GitHub Release；安装版会从该 Release 自动更新。
 
 也可在本机设置具有仓库 Contents 写入权限的 `GITHUB_TOKEN` 后执行 `npm run publish`。
 

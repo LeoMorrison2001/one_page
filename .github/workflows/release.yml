@@ -24,3 +24,14 @@ jobs:
       - run: npm run publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish release notes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = node -p "require('./package.json').version"
+          $notes = Get-Content '.github/release-notes.md' -Raw -Encoding utf8
+          $notes = $notes.Replace('{{version}}', $version)
+          $notes | Set-Content 'release-notes.md' -Encoding utf8
+          gh release edit "v$version" --title "一页 v$version" --notes-file 'release-notes.md' --draft=false

@@ -1,5 +1,10 @@
 const { FusesPlugin } = require('@electron-forge/plugin-fuses');
 const { FuseV1Options, FuseVersion } = require('@electron/fuses');
+const fs = require('node:fs');
+const path = require('node:path');
+const packageJson = require('./package.json');
+
+const releaseFilePrefix = `one-page-${packageJson.version}-windows-x64`;
 
 module.exports = {
   packagerConfig: {
@@ -15,7 +20,7 @@ module.exports = {
       name: '@electron-forge/maker-squirrel',
       config: {
         setupIcon: './assets/app-icon.ico',
-        setupExe: '一页-1.0.0-安装程序.exe',
+        setupExe: `${releaseFilePrefix}-setup.exe`,
       },
     },
     {
@@ -36,9 +41,23 @@ module.exports = {
       name: '@electron-forge/publisher-github',
       config: {
         repository: { owner: 'LeoMorrison2001', name: 'one_page' },
+        // Keep a release as a draft while assets upload; GitHub Actions fills
+        // in the Chinese title and notes, then publishes it.
+        force: true,
       },
     },
   ],
+  hooks: {
+    postMake: async (_config, makeResults) => makeResults.map((result) => ({
+      ...result,
+      artifacts: result.artifacts.map((artifactPath) => {
+        if (result.platform !== 'win32' || !artifactPath.endsWith('.zip')) return artifactPath;
+        const portablePath = path.join(path.dirname(artifactPath), `${releaseFilePrefix}-portable.zip`);
+        fs.renameSync(artifactPath, portablePath);
+        return portablePath;
+      }),
+    })),
+  },
   plugins: [
     {
       name: '@electron-forge/plugin-vite',
